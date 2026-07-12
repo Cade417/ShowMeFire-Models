@@ -26,8 +26,8 @@ cannot silently replace it.
 
 | Repository | Responsibility |
 | --- | --- |
-| `ShowMeFire-Models` | Archive ingestion, static-data acquisition, alignment, training, evaluation, ONNX export, release publishing |
-| `api` | Live RTMA capture, historical observation/RTMA backfill, daily archives, verified release import, production inference and fallback |
+| `ShowMeFire-Models` | Archive ingestion, HRRR-driven historical RTMA backfill, static-data acquisition, alignment, training, evaluation, ONNX export, release publishing |
+| `api` | Live RTMA capture with seven-day retention, historical Synoptic backfill, daily HRRR/observation archives, verified release import, production inference and fallback |
 
 The two repositories have independent model registries. A candidate crosses
 between them only through a GitHub release.
@@ -108,11 +108,7 @@ python scripts/backfill_synoptic.py --dry-run
 # Fetch the rolling one-year entitlement in resumable UTC days.
 python scripts/backfill_synoptic.py
 
-# Inspect and run the matching RTMA backfill.
-python scripts/backfill_rtma.py --dry-run
-python scripts/backfill_rtma.py
-
-# Atomically merge new members into daily archives.
+# Atomically bundle HRRR, observations, and forecasts.
 python -m services.archive_bundler
 ```
 
@@ -123,8 +119,10 @@ Requirements:
 - Backfills are resumable; failed days/hours remain visible in their manifests.
 - Existing ZIPs are copied, merged, CRC-checked, and atomically replaced.
 
-RTMA live capture runs hourly at minute `:50` through APScheduler and targets
-the preceding complete UTC analysis hour.
+RTMA live capture runs hourly at minute `:50` through APScheduler, targets the
+preceding complete UTC analysis hour, and retains seven days by default. New
+RTMA files are not placed in permanent daily ZIPs. Set
+`RTMA_RETENTION_DAYS` to an integer greater than zero to change the live cache.
 
 ## 3. Synchronize archives to the training machine
 
@@ -139,13 +137,43 @@ export SMF_REMOTE_ARCHIVE_DIR=/remote/path/to/api/data_archive_day/
 The script transfers completed ZIPs without `--inplace`, then routes:
 
 - `hrrr_*.nc` to `cache/hrrr/`;
-- `rtma_*.nc` to `cache/rtma/`;
+- legacy `rtma_*.nc` members, when present, to `cache/rtma/`;
 - `raw_data_*.json` to `archive/raw_data/`;
 - station forecast JSON to `archive/forecasts/`.
 
 Do not synchronize while a manual server backfill/merge is still running.
 
-## 4. Build aligned station data and required baselines
+Old production ZIPs that already contain RTMA remain valid and are not
+compacted. New ZIPs intentionally contain no RTMA.
+
+## 4. Backfill RTMA on the training machine
+
+Historical RTMA storage belongs under `SMF_DATA_ROOT`. Discover the exact
+anchors required by local HRRR initialization filenames:
+
+```bash
+python scripts/backfill_rtma_for_hrrr.py --dry-run
+python scripts/backfill_rtma_for_hrrr.py --limit 2
+python scripts/backfill_rtma_for_hrrr.py
+```
+
+The command deduplicates HRRR run timestamps, validates RTMA extracted from
+legacy ZIPs, and downloads only missing matching analyses. It does not fetch
+all 24 hours of every day.
+
+Optional filters:
+
+```bash
+python scripts/backfill_rtma_for_hrrr.py --start 2026-01-01 --end 2026-03-31
+python scripts/backfill_rtma_for_hrrr.py --force --limit 2
+```
+
+The resumable manifest is
+`$SMF_DATA_ROOT/cache/rtma/backfill_manifest.json`. A full run exits nonzero
+when a required selected anchor remains unresolved. `--limit` applies only to
+the selected missing/forced work and is intended for smoke testing.
+
+## 5. Build aligned station data and required baselines
 
 ```bash
 python spatial/build_aligned_dataset.py --max-initial-age-hours 3
@@ -169,7 +197,7 @@ station sequence model over persistence and the incumbent control.
 valid operational outcome: retain the station model, continue collection, and
 do not use `--force` for a production candidate.
 
-## 5. Acquire static source rasters
+## 6. Acquire static source rasters
 
 The bundle requires one single-band GeoTIFF for each product over the Missouri
 domain plus the one-degree buffer:
@@ -222,7 +250,7 @@ mosaic them. The final build still requires one `--dem-file` or `--dem-url`.
 Verify `source_manifest.json` contains all six products, checksums, byte sizes,
 release label, acquisition time, and resolved source URLs where applicable.
 
-## 6. Build the immutable static bundle
+## 7. Build the immutable static bundle
 
 Choose a normal representative HRRR file from the same product/run structure
 used for spatial training:
@@ -249,7 +277,7 @@ Bundles are immutable. If the output version already exists, choose a new
 version; do not overwrite it. A bundle change requires tensor rebuild,
 retraining, evaluation, and a new model release.
 
-## 7. Build dynamic tensors
+## 8. Build dynamic tensors
 
 ```bash
 python spatial/build_spatial_tensors.py \
@@ -272,7 +300,7 @@ duplicated in every NPZ.
 If the bundle changes, remove or relocate tensors built against the old
 fingerprint before rebuilding. Never mix fingerprints in one experiment.
 
-## 8. Train the static-feature ablation
+## 9. Train the static-feature ablation
 
 After the spatial gate succeeds:
 
@@ -305,7 +333,7 @@ Selection rules:
 `--force` bypasses the prerequisite data/performance gate for development
 only. A forced run must never be registered or promoted as production.
 
-## 9. Register and publish a beta candidate
+## 10. Register and publish a beta candidate
 
 Choose any tensor from the same static fingerprint as the parity/smoke sample:
 
@@ -337,7 +365,7 @@ The printed tag has the form
 `fuel_moisture_spatial-v<semantic-beta-version>`. Do not mark the GitHub
 release final as a substitute for server import, verification, and promotion.
 
-## 10. Import and activate on the API server
+## 11. Import and activate on the API server
 
 Ensure the deployed API dependencies include `onnxruntime` and restart the
 container after changing requirements.
@@ -404,7 +432,17 @@ swap individual model/bundle files manually.
 - Refresh 3DEP only when a meaningful updated domain mosaic is available.
 
 Every static-source refresh gets a new source release label and bundle version
-and repeats steps 6–10. Never place a new static bundle under an old model.
+and repeats steps 7–11. Never place a new static bundle under an old model.
+
+## RTMA migration rollout
+
+1. Stop any running API `backfill_rtma.py` process before deploying.
+2. Deploy the API retention and archive-exclusion change.
+3. Allow the live cleanup to remove unbundled RTMA older than seven days.
+4. Do not rewrite historical ZIPs merely to remove their existing RTMA.
+5. Pull current HRRR and observation archives to the training machine.
+6. Run the HRRR-driven dry-run, two-anchor smoke test, and full local backfill.
+7. Confirm every selected manifest record is complete before alignment.
 
 ## Troubleshooting
 

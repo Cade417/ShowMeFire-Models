@@ -32,7 +32,7 @@ export SMF_REMOTE_ARCHIVE_DIR=/remote/path/to/api/data_archive_day/
 ./scripts/pull_archives.sh
 ```
 
-Plain bash + rsync + ssh - works on Ubuntu (including WSL), macOS, or any Linux box. Fresh Ubuntu/WSL installs may need `sudo apt install -y rsync openssh-client` first. This populates `$SMF_DATA_ROOT/archive_zips/`, then unpacks into `cache/hrrr/`, `cache/rtma/`, `archive/raw_data/`, and `archive/forecasts/`.
+Plain bash + rsync + ssh - works on Ubuntu (including WSL), macOS, or any Linux box. Fresh Ubuntu/WSL installs may need `sudo apt install -y rsync openssh-client` first. This populates `$SMF_DATA_ROOT/archive_zips/`, then unpacks HRRR, observations, and forecasts. RTMA from older ZIPs is still accepted, but new historical RTMA is downloaded locally by `scripts/backfill_rtma_for_hrrr.py`.
 
 To just unpack zips you already have locally (no download), run `python pipelines/unpack_archive_zip.py` directly.
 
@@ -53,11 +53,14 @@ python pipelines/train_model.py         # registers beta by default; review befo
 
 ## RTMA + sequence fuel-moisture pipeline
 
-After the server has captured/backfilled RTMA and Synoptic data and the daily
-archives have been pulled, run the additive pipeline (the existing model stays
+After production HRRR/Synoptic archives have been pulled, backfill the matching
+RTMA anchors locally and run the additive pipeline (the existing model stays
 untouched):
 
 ```bash
+python scripts/backfill_rtma_for_hrrr.py --dry-run
+python scripts/backfill_rtma_for_hrrr.py --limit 2
+python scripts/backfill_rtma_for_hrrr.py
 python spatial/build_aligned_dataset.py
 python spatial/coverage_report.py
 python spatial/evaluate_baselines.py
