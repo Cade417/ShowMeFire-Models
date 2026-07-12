@@ -16,13 +16,20 @@ export SMF_DATA_ROOT=/path/to/your/data   # e.g. an external drive, or a desktop
 
 ## Getting training data in
 
-Training input comes from unpacking the daily zip bundles the server produces (`api/services/archive_bundler.py`, written to `data_archive_day/` on the server). Copy those zips into `$SMF_DATA_ROOT/archive_zips/` (scp, USB drive, however's convenient), then:
+Training input comes from unpacking the daily zip bundles the server produces (`api/services/archive_bundler.py`, written to `data_archive_day/` on the server). `scripts/pull_archives.sh` handles both steps - rsyncs new zips down (resumable, only pulls what's new on repeat runs) and unpacks them:
 
 ```bash
-python pipelines/unpack_archive_zip.py
+./scripts/pull_archives.sh user@server /remote/path/to/api/data_archive_day/
+
+# or set these once (e.g. in ~/.bashrc) and just run with no args:
+export SMF_SSH_TARGET=user@server
+export SMF_REMOTE_ARCHIVE_DIR=/remote/path/to/api/data_archive_day/
+./scripts/pull_archives.sh
 ```
 
-This populates `cache/hrrr/`, `archive/raw_data/`, and `archive/forecasts/` under `$SMF_DATA_ROOT`.
+Plain bash + rsync + ssh - works on Ubuntu (including WSL), macOS, or any Linux box. Fresh Ubuntu/WSL installs may need `sudo apt install -y rsync openssh-client` first. This populates `$SMF_DATA_ROOT/archive_zips/`, then unpacks into `cache/hrrr/`, `archive/raw_data/`, and `archive/forecasts/`.
+
+To just unpack zips you already have locally (no download), run `python pipelines/unpack_archive_zip.py` directly.
 
 ## Running the pipeline
 
