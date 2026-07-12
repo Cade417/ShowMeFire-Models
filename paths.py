@@ -20,6 +20,7 @@ DATA_ROOT = Path(os.getenv("SMF_DATA_ROOT", REPO_ROOT / "data")).resolve()
 
 CACHE_DIR = DATA_ROOT / "cache"
 CACHE_HRRR_DIR = CACHE_DIR / "hrrr"
+CACHE_RTMA_DIR = CACHE_DIR / "rtma"
 
 ARCHIVE_DIR = DATA_ROOT / "archive"
 ARCHIVE_RAW_DATA_DIR = ARCHIVE_DIR / "raw_data"
@@ -35,7 +36,13 @@ DB_PATH = DATA_ROOT / "showmefire.db"  # this repo's own independent training DB
 MODELS_DIR = DATA_ROOT / "models"  # this repo's own independent model registry (see models/versioning.py)
 
 PLOTS_DIR = DATA_ROOT / "plots"  # diagnostic plots (feature importance, station previews, etc.)
+ALIGNED_DIR = DATA_ROOT / "aligned"
+REPORTS_DIR = DATA_ROOT / "reports"
+STATIC_DIR = DATA_ROOT / "static"
+STATIC_SOURCE_DIR = STATIC_DIR / "source"
+STATIC_BUNDLE_DIR = STATIC_DIR / "bundles"
 
-for _d in (CACHE_HRRR_DIR, ARCHIVE_RAW_DATA_DIR, ARCHIVE_FORECASTS_DIR, ARCHIVE_ZIPS_DIR,
-           TRAINING_DATA_DIR, SNAPSHOTS_DIR, MODELS_DIR, PLOTS_DIR):
+for _d in (CACHE_HRRR_DIR, CACHE_RTMA_DIR, ARCHIVE_RAW_DATA_DIR, ARCHIVE_FORECASTS_DIR, ARCHIVE_ZIPS_DIR,
+           TRAINING_DATA_DIR, SNAPSHOTS_DIR, MODELS_DIR, PLOTS_DIR, ALIGNED_DIR, REPORTS_DIR,
+           STATIC_SOURCE_DIR, STATIC_BUNDLE_DIR):
     _d.mkdir(parents=True, exist_ok=True)

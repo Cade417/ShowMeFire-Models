@@ -19,6 +19,7 @@ from pathlib import Path
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from models.versioning import get_model_entry, load_active_model_path
+import paths
 
 
 def publish(model_type, version=None, repo=None):
@@ -38,16 +39,26 @@ def publish(model_type, version=None, repo=None):
 
     with tempfile.TemporaryDirectory() as tmp:
         meta_path = Path(tmp) / "metadata.json"
+        asset_paths = []
+        published_assets = {}
+        if beta.get("assets"):
+            for role, asset in beta["assets"].items():
+                path = paths.DATA_ROOT / asset["file"]
+                asset_paths.append(str(path))
+                published_assets[role] = {**asset, "filename": path.name}
+        else:
+            asset_paths.append(str(model_path))
         meta_path.write_text(json.dumps({
             "model_type": model_type,
             "version": beta["version"],
             "performance": beta.get("performance", {}),
             "trained_at": beta.get("trained_at"),
+            "assets": published_assets,
         }, indent=2))
 
         cmd = [
             "gh", "release", "create", tag,
-            str(model_path), str(meta_path),
+            *asset_paths, str(meta_path),
             "--repo", repo,
             "--prerelease",
             "--title", f"{model_type} {beta['version']}",
@@ -62,7 +73,7 @@ def publish(model_type, version=None, repo=None):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Publish a beta model candidate as a GitHub pre-release")
-    parser.add_argument("--model", required=True, choices=["fuel_moisture", "fire_danger"])
+    parser.add_argument("--model", required=True, choices=["fuel_moisture", "fire_danger", "fuel_moisture_spatial"])
     parser.add_argument("--version", default=None, help="Beta version to publish (defaults to the current beta)")
     parser.add_argument("--repo", default=None, help="owner/repo (defaults to SMF_GITHUB_REPO env var)")
     args = parser.parse_args()

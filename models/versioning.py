@@ -13,6 +13,7 @@ Nothing lands in `stable` except through promote() - register_trained_model()
 always writes to `beta` unless a caller explicitly asks otherwise.
 """
 import json
+import hashlib
 import re
 import shutil
 import sys
@@ -50,12 +51,23 @@ def _load_config():
 
 
 def _save_config(config):
-    with open(CONFIG_PATH, "w") as f:
+    CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    temp = CONFIG_PATH.with_suffix(CONFIG_PATH.suffix + ".tmp")
+    with open(temp, "w") as f:
         json.dump(config, f, indent=2)
+    temp.replace(CONFIG_PATH)
 
 
 def _entry(model_type, config):
     return config.setdefault(model_type, {"stable": None, "beta": None, "history": []})
+
+
+def _sha256(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
 
 
 def parse_version(version):
@@ -102,7 +114,7 @@ def next_version(model_type, bump="patch", beta=False):
     return f"{base}-beta.1"
 
 
-def register_trained_model(model_type, source_path, performance=None, bump="patch", channel="beta"):
+def register_trained_model(model_type, source_path=None, performance=None, bump="patch", channel="beta", assets=None):
     """Register a freshly trained model artifact under the given channel.
 
     Copies `source_path` into models/versions/ under an immutable, versioned
@@ -113,12 +125,24 @@ def register_trained_model(model_type, source_path, performance=None, bump="patc
     if channel not in ("beta", "stable"):
         raise ValueError(f"Unknown channel: {channel!r}")
 
-    source_path = Path(source_path)
     version = next_version(model_type, bump=bump, beta=(channel == "beta"))
 
     VERSIONS_DIR.mkdir(parents=True, exist_ok=True)
-    versioned_path = VERSIONS_DIR / f"{model_type}_{version}{source_path.suffix}"
-    shutil.copy2(source_path, versioned_path)
+    asset_records = {}
+    if assets:
+        for role, value in assets.items():
+            specification = value if isinstance(value, dict) else {"path": value}
+            source = Path(specification["path"])
+            destination = VERSIONS_DIR / f"{model_type}_{version}_{role}{source.suffix}"
+            shutil.copy2(source, destination)
+            asset_records[role] = {"file": str(destination.relative_to(API_DIR)), "sha256": _sha256(destination),
+                                   **{key: val for key, val in specification.items() if key != "path"}}
+        primary = asset_records.get("model") or asset_records.get("checkpoint")
+        versioned_path = API_DIR / primary["file"] if primary else None
+    else:
+        source_path = Path(source_path)
+        versioned_path = VERSIONS_DIR / f"{model_type}_{version}{source_path.suffix}"
+        shutil.copy2(source_path, versioned_path)
 
     config = _load_config()
     entry = _entry(model_type, config)
@@ -126,10 +150,12 @@ def register_trained_model(model_type, source_path, performance=None, bump="patc
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     record = {
         "version": version,
-        "file": str(versioned_path.relative_to(API_DIR)),
+        "file": str(versioned_path.relative_to(API_DIR)) if versioned_path else None,
         "performance": performance or {},
         ("trained_at" if channel == "beta" else "promoted_at"): now,
     }
+    if asset_records:
+        record["assets"] = asset_records
 
     entry[channel] = record
     entry.setdefault("history", []).append({**record, "channel": channel, "recorded_at": now})
@@ -169,9 +195,11 @@ def promote(model_type, version=None):
     release_version = f"{major}.{minor}.{patch}"
 
     old_path = API_DIR / beta["file"]
-    new_path = old_path.with_name(f"{model_type}_{release_version}{old_path.suffix}")
-    if old_path != new_path:
-        old_path.rename(new_path)
+    new_path = old_path
+    if not beta.get("assets"):
+        new_path = old_path.with_name(f"{model_type}_{release_version}{old_path.suffix}")
+        if old_path != new_path:
+            old_path.rename(new_path)
 
     promoted = {k: v for k, v in beta.items() if k != "trained_at"}
     promoted["version"] = release_version
@@ -207,3 +235,16 @@ def load_active_model_path(model_type, channel="stable"):
     if not path.exists():
         raise FileNotFoundError(f"Registered {channel} model file missing: {path}")
     return path
+
+
+def load_active_assets(model_type, channel="stable"):
+    entry = (_load_config().get(model_type) or {}).get(channel)
+    if not entry or not entry.get("assets"):
+        raise FileNotFoundError(f"No asset contract for {model_type!r} channel {channel!r}")
+    resolved = {}
+    for role, asset in entry["assets"].items():
+        path = API_DIR / asset["file"]
+        if not path.exists() or _sha256(path) != asset["sha256"]:
+            raise FileNotFoundError(f"Missing or invalid {role} asset: {path}")
+        resolved[role] = {**asset, "path": path}
+    return resolved

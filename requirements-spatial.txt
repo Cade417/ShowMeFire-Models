@@ -1,0 +1,5 @@
+# Install PyTorch from the CUDA index appropriate for the Windows machine first:
+#   pip install torch --index-url https://download.pytorch.org/whl/cu124
+torch>=2.2
+onnx>=1.16
+onnxruntime>=1.18

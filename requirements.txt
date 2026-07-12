@@ -22,3 +22,6 @@ geopandas==1.1.1
 shapely==2.1.2
 CairoSVG==2.8.2
 cairocffi==1.7.1
+rasterio==1.4.4
+pyproj==3.7.1
+requests==2.32.5

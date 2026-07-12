@@ -2,6 +2,11 @@
 
 Standalone training environment for the Show Me Fire fuel-moisture / fire-danger models, split out of the main `Show Me Fire/api` repo so training can run on a different machine (e.g. a desktop with more storage and a GPU) without needing the server's disk or touching what's live.
 
+For the complete RTMA/HRRR spatial workflow—including static data acquisition,
+Windows CUDA setup, training gates, release/import, API activation, rollback,
+and troubleshooting—use the
+[Spatial Fuel-Moisture Operator Runbook](docs/spatial_fuel_moisture_runbook.md).
+
 No bulk training data is ever pushed to this repo - see `paths.py`.
 
 ## Setup
@@ -27,11 +32,14 @@ export SMF_REMOTE_ARCHIVE_DIR=/remote/path/to/api/data_archive_day/
 ./scripts/pull_archives.sh
 ```
 
-Plain bash + rsync + ssh - works on Ubuntu (including WSL), macOS, or any Linux box. Fresh Ubuntu/WSL installs may need `sudo apt install -y rsync openssh-client` first. This populates `$SMF_DATA_ROOT/archive_zips/`, then unpacks into `cache/hrrr/`, `archive/raw_data/`, and `archive/forecasts/`.
+Plain bash + rsync + ssh - works on Ubuntu (including WSL), macOS, or any Linux box. Fresh Ubuntu/WSL installs may need `sudo apt install -y rsync openssh-client` first. This populates `$SMF_DATA_ROOT/archive_zips/`, then unpacks into `cache/hrrr/`, `cache/rtma/`, `archive/raw_data/`, and `archive/forecasts/`.
 
 To just unpack zips you already have locally (no download), run `python pipelines/unpack_archive_zip.py` directly.
 
 ## Running the pipeline
+
+The commands in this section are the legacy point-based XGBoost fallback
+pipeline. They do not train the spatial PyTorch model.
 
 ```bash
 python pipelines/ingest_obs.py          # raw JSON -> this repo's own SQLite DB (never the server's)
@@ -40,8 +48,59 @@ python scripts/create_snapshots.py      # register new HRRR files as snapshots
 python pipelines/extract_hrrr.py        # extract weather features for unprocessed snapshots
 python pipelines/generate_training_set.py
 python pipelines/prepare_features.py
-python pipelines/train_model.py         # --channel beta (default) or --channel stable, --bump patch/minor/major
+python pipelines/train_model.py         # registers beta by default; review before promotion
 ```
+
+## RTMA + sequence fuel-moisture pipeline
+
+After the server has captured/backfilled RTMA and Synoptic data and the daily
+archives have been pulled, run the additive pipeline (the existing model stays
+untouched):
+
+```bash
+python spatial/build_aligned_dataset.py
+python spatial/coverage_report.py
+python spatial/evaluate_baselines.py
+
+# Windows/NVIDIA: install the CUDA-matched torch wheel, then the extras.
+pip install torch --index-url https://download.pytorch.org/whl/cu124
+pip install -r requirements-spatial.txt
+python spatial/env_check.py
+python spatial/train_station_sequence.py
+python spatial/check_spatial_gate.py
+
+# Run the static-bundle workflow below only after the gate succeeds.
+```
+
+Fuel-moisture loss and metrics are always masked to real station observations.
+The statewide output includes quantiles, nearest-station distance, effective
+station count, and confidence; RTMA is weather input and never an FM label.
+
+### Static terrain and fuel bundle
+
+Acquire or register official GeoTIFFs, build one immutable HRRR-grid bundle,
+then reference it from every run tensor:
+
+```bash
+python static_features/download_sources.py \
+  --dem-file /data/dem.tif \
+  --nlcd-class-file /data/nlcd_class.tif \
+  --nlcd-confidence-file /data/nlcd_confidence.tif \
+  --fbfm40-file /data/landfire_fbfm40.tif \
+  --fvt-file /data/landfire_fvt.tif \
+  --canopy-cover-file /data/landfire_canopy.tif \
+  --release 3dep-nlcd-landfire-2026
+
+python static_features/build_bundle.py --hrrr data/cache/hrrr/<representative>.nc --version 2026.1
+python spatial/build_spatial_tensors.py --static-bundle data/static/bundles/static_features_2026.1.nc
+python spatial/run_ablation.py --static-bundle data/static/bundles/static_features_2026.1.nc
+python spatial/register_spatial_candidate.py --static-bundle data/static/bundles/static_features_2026.1.nc --sample data/aligned/spatial_tensors/<sample>.npz
+python pipelines/publish_release.py --model fuel_moisture_spatial
+```
+
+Provider URLs may be supplied instead of local files. Original rasters remain
+under `SMF_DATA_ROOT` and are never committed. The API imports the published
+bundle; it never downloads or rebuilds source geography.
 
 Every run of `train_model.py` lands in this repo's own `beta` channel (`$SMF_DATA_ROOT/models/config.json`) - it never silently overwrites anything. To promote a candidate within this repo's own registry:
 
@@ -50,6 +109,10 @@ python pipelines/promote_model.py --model fuel_moisture --version 1.5.0-beta.1
 ```
 
 ## Getting a model back into production
+
+The example below is for the legacy single-file model. Spatial candidates use
+the multi-asset procedure in the operator runbook; do not adapt this example
+by manually attaching or copying spatial assets.
 
 Promotion here only affects *this repo's own* registry - it has no effect on the live server, which has its own independent copy of `models/versioning.py` and its own `config.json`. The bridge between the two is git releases:
 

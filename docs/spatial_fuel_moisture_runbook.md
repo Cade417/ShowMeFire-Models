@@ -1,0 +1,449 @@
+# Spatial Fuel-Moisture Operator Runbook
+
+This is the canonical guide for collecting data, building static geography,
+training the probabilistic station and spatial models, publishing a candidate,
+and activating it in the Show Me Fire API.
+
+## What the system predicts
+
+The spatial model predicts 12 hourly fuel-moisture quantiles (`P10`, `P50`,
+`P90`) from:
+
+- real Synoptic station fuel-moisture observations at forecast initialization;
+- RTMA analyzed temperature, relative humidity, and wind;
+- the HRRR forecast sequence for temperature, RH, wind, and precipitation;
+- a physics-based fuel-moisture trajectory;
+- terrain, land cover, vegetation, fuel model, and canopy data.
+
+Synoptic observations are the only fuel-moisture truth. RTMA, HRRR,
+interpolation, and static rasters are model inputs and must never be written as
+observed fuel-moisture labels.
+
+The current XGBoost model remains the production fallback. A training run
+cannot silently replace it.
+
+## Repository responsibilities
+
+| Repository | Responsibility |
+| --- | --- |
+| `ShowMeFire-Models` | Archive ingestion, static-data acquisition, alignment, training, evaluation, ONNX export, release publishing |
+| `api` | Live RTMA capture, historical observation/RTMA backfill, daily archives, verified release import, production inference and fallback |
+
+The two repositories have independent model registries. A candidate crosses
+between them only through a GitHub release.
+
+## Data directory layout
+
+All training data is under `SMF_DATA_ROOT`. If unset, it defaults to
+`ShowMeFire-Models/data/`.
+
+```text
+$SMF_DATA_ROOT/
+├── archive_zips/               # daily ZIPs copied from production
+├── archive/raw_data/           # canonical Synoptic JSON days
+├── cache/hrrr/                 # HRRR forecast NetCDF files
+├── cache/rtma/                 # hourly RTMA NetCDF files
+├── aligned/
+│   ├── station_leads.csv
+│   └── spatial_tensors/        # dynamic-only NPZ run tensors
+├── static/
+│   ├── source/                 # original GeoTIFFs + source manifest
+│   └── bundles/                # immutable 256x256 NetCDF bundles
+├── models/                     # local beta/stable registry and candidates
+└── reports/                    # coverage, baseline, sequence, ablation reports
+```
+
+Never commit bulk data, source rasters, tensors, trained weights, or API tokens.
+
+## 1. Environment setup
+
+### Base training environment
+
+```bash
+cd ShowMeFire-Models
+python -m venv .venv
+
+# Linux/macOS
+source .venv/bin/activate
+
+# Windows PowerShell
+.venv\Scripts\Activate.ps1
+
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+Set a durable data location:
+
+```bash
+# Linux/macOS/WSL
+export SMF_DATA_ROOT=/path/to/showmefire-training-data
+
+# Windows PowerShell
+$env:SMF_DATA_ROOT = "D:\ShowMeFire-Training-Data"
+```
+
+### Windows NVIDIA environment
+
+Use the CUDA index compatible with the installed NVIDIA driver. The current
+project example is CUDA 12.4:
+
+```powershell
+pip install torch --index-url https://download.pytorch.org/whl/cu124
+pip install -r requirements-spatial.txt
+python spatial/env_check.py
+```
+
+Do not begin full training unless `cuda_available=True` and the expected GPU
+and VRAM are printed. `num_workers=0` is the supported Windows default.
+
+## 2. Production data collection and backfill
+
+Run these commands inside the API environment on the server.
+
+```bash
+# Inspect the one-year Synoptic job. This contacts metadata but writes no days.
+python scripts/backfill_synoptic.py --dry-run
+
+# Fetch the rolling one-year entitlement in resumable UTC days.
+python scripts/backfill_synoptic.py
+
+# Inspect and run the matching RTMA backfill.
+python scripts/backfill_rtma.py --dry-run
+python scripts/backfill_rtma.py
+
+# Atomically merge new members into daily archives.
+python -m services.archive_bundler
+```
+
+Requirements:
+
+- `SYNOPTIC_API_TOKEN` must be configured on the server.
+- Fuel-moisture labels remain missing when Synoptic has no valid reading.
+- Backfills are resumable; failed days/hours remain visible in their manifests.
+- Existing ZIPs are copied, merged, CRC-checked, and atomically replaced.
+
+RTMA live capture runs hourly at minute `:50` through APScheduler and targets
+the preceding complete UTC analysis hour.
+
+## 3. Synchronize archives to the training machine
+
+From Linux, macOS, or WSL:
+
+```bash
+export SMF_SSH_TARGET=user@production-host
+export SMF_REMOTE_ARCHIVE_DIR=/remote/path/to/api/data_archive_day/
+./scripts/pull_archives.sh
+```
+
+The script transfers completed ZIPs without `--inplace`, then routes:
+
+- `hrrr_*.nc` to `cache/hrrr/`;
+- `rtma_*.nc` to `cache/rtma/`;
+- `raw_data_*.json` to `archive/raw_data/`;
+- station forecast JSON to `archive/forecasts/`.
+
+Do not synchronize while a manual server backfill/merge is still running.
+
+## 4. Build aligned station data and required baselines
+
+```bash
+python spatial/build_aligned_dataset.py --max-initial-age-hours 3
+python spatial/coverage_report.py
+python spatial/evaluate_baselines.py
+python spatial/train_station_sequence.py
+python spatial/check_spatial_gate.py
+```
+
+Review:
+
+- `reports/coverage.json`
+- `reports/baseline_metrics.json`
+- `reports/sequence_metrics.json`
+
+The spatial gate requires at least 180 usable initialization dates, a typical
+20 stations per usable day, and at least 5% temporal MAE improvement by the
+station sequence model over persistence and the incumbent control.
+
+`check_spatial_gate.py` exits with status `2` when the gate fails. That is a
+valid operational outcome: retain the station model, continue collection, and
+do not use `--force` for a production candidate.
+
+## 5. Acquire static source rasters
+
+The bundle requires one single-band GeoTIFF for each product over the Missouri
+domain plus the one-degree buffer:
+
+| CLI name | Required content | Type/units | Resampling |
+| --- | --- | --- | --- |
+| `dem` | USGS 3DEP 1/3 arc-second bare-earth DEM | continuous meters | bilinear |
+| `nlcd-class` | latest complete Annual NLCD land-cover class | categorical integer | nearest |
+| `nlcd-confidence` | matching NLCD class confidence | continuous product value | bilinear |
+| `fbfm40` | LANDFIRE Fire Behavior Fuel Model 40 | categorical integer | nearest |
+| `fvt` | LANDFIRE Fuel Vegetation Type | categorical integer | nearest |
+| `canopy-cover` | LANDFIRE canopy cover | continuous percent | bilinear |
+
+Use the newest complete release intentionally; do not replace source rasters
+during an existing training experiment.
+
+Official entry points:
+
+- USGS 3DEP/The National Map: <https://www.usgs.gov/3d-elevation-program>
+- Annual NLCD/MRLC: <https://www.mrlc.gov/data/project/annual-nlcd>
+- LANDFIRE data access: <https://landfire.gov/data>
+
+The acquisition command accepts either a local file or a direct official URL
+for each product. ZIP URLs are supported only when the archive contains one
+GeoTIFF. Mosaic multi-tile products before registering them.
+
+```bash
+python static_features/download_sources.py \
+  --dem-file /source/3dep_missouri_buffered.tif \
+  --nlcd-class-file /source/nlcd_class.tif \
+  --nlcd-confidence-file /source/nlcd_confidence.tif \
+  --fbfm40-file /source/landfire_fbfm40.tif \
+  --fvt-file /source/landfire_fvt.tif \
+  --canopy-cover-file /source/landfire_canopy_cover.tif \
+  --release 3dep-nlcd-landfire-2026
+```
+
+For a direct official URL, replace `--<product>-file` with
+`--<product>-url`. Downloads use `.partial` files and HTTP Range resume.
+
+To discover relevant 3DEP tile URLs without registering a DEM:
+
+```bash
+python static_features/download_sources.py --discover-3dep --release discovery-only
+```
+
+This writes the URLs to `static/source/source_manifest.json`; it does not
+mosaic them. The final build still requires one `--dem-file` or `--dem-url`.
+
+Verify `source_manifest.json` contains all six products, checksums, byte sizes,
+release label, acquisition time, and resolved source URLs where applicable.
+
+## 6. Build the immutable static bundle
+
+Choose a normal representative HRRR file from the same product/run structure
+used for spatial training:
+
+```bash
+python static_features/build_bundle.py \
+  --hrrr "$SMF_DATA_ROOT/cache/hrrr/hrrr_YYYYMMDD_12z_f04-15.nc" \
+  --version 2026.1
+```
+
+Outputs:
+
+```text
+static/bundles/static_features_2026.1.nc
+static/bundles/static_features_2026.1.json
+```
+
+The NetCDF contains the canonical HRRR Lambert `256×256` grid, projected
+coordinates, latitude/longitude, elevation, slope, aspect sine/cosine,
+ruggedness, NLCD confidence, canopy cover, and encoded NLCD/FBFM40/FVT
+categories. Category index `0` always means unknown/nodata.
+
+Bundles are immutable. If the output version already exists, choose a new
+version; do not overwrite it. A bundle change requires tensor rebuild,
+retraining, evaluation, and a new model release.
+
+## 7. Build dynamic tensors
+
+```bash
+python spatial/build_spatial_tensors.py \
+  --static-bundle "$SMF_DATA_ROOT/static/bundles/static_features_2026.1.nc"
+```
+
+For a smoke test first:
+
+```bash
+python spatial/build_spatial_tensors.py \
+  --static-bundle "$SMF_DATA_ROOT/static/bundles/static_features_2026.1.nc" \
+  --limit 7
+```
+
+Run NPZ files contain dynamic weather/current-state data, physics trajectory,
+sparse real targets, temporal/station/region masks, and the static bundle
+checksum/grid fingerprint. Static geography is loaded separately and is not
+duplicated in every NPZ.
+
+If the bundle changes, remove or relocate tensors built against the old
+fingerprint before rebuilding. Never mix fingerprints in one experiment.
+
+## 8. Train the static-feature ablation
+
+After the spatial gate succeeds:
+
+```bash
+python spatial/run_ablation.py \
+  --static-bundle "$SMF_DATA_ROOT/static/bundles/static_features_2026.1.nc" \
+  --epochs 20 \
+  --batch-size 2
+```
+
+The command trains identical chronological candidates:
+
+1. dynamic-only control;
+2. terrain;
+3. terrain + NLCD + canopy;
+4. terrain + LANDFIRE;
+5. all static features.
+
+It evaluates future dates, held-out stations, and the held-out eastern region.
+The report is `reports/spatial_ablation.json`.
+
+Selection rules:
+
+- choose the smallest candidate within 1% of the best temporal MAE;
+- the static candidate must beat dynamic-only temporal MAE;
+- interval coverage may not regress by more than two percentage points;
+- critical-low-FM MAE may not regress by more than 1%;
+- quantile ordering must be valid.
+
+`--force` bypasses the prerequisite data/performance gate for development
+only. A forced run must never be registered or promoted as production.
+
+## 9. Register and publish a beta candidate
+
+Choose any tensor from the same static fingerprint as the parity/smoke sample:
+
+```bash
+python spatial/register_spatial_candidate.py \
+  --static-bundle "$SMF_DATA_ROOT/static/bundles/static_features_2026.1.nc" \
+  --sample "$SMF_DATA_ROOT/aligned/spatial_tensors/spatial_YYYYMMDDHH.npz"
+```
+
+Registration is refused unless the ablation gate passes. It exports ONNX,
+compares ONNX Runtime against PyTorch, writes a smoke NPZ, and registers one
+beta asset contract containing:
+
+- ONNX model;
+- PyTorch checkpoint;
+- static NetCDF bundle;
+- static manifest;
+- evaluation report;
+- inference smoke sample.
+
+Publish the beta as a GitHub prerelease:
+
+```bash
+export SMF_GITHUB_REPO=Cade417/ShowMeFire-Models
+python pipelines/publish_release.py --model fuel_moisture_spatial
+```
+
+The printed tag has the form
+`fuel_moisture_spatial-v<semantic-beta-version>`. Do not mark the GitHub
+release final as a substitute for server import, verification, and promotion.
+
+## 10. Import and activate on the API server
+
+Ensure the deployed API dependencies include `onnxruntime` and restart the
+container after changing requirements.
+
+```bash
+python pipelines/import_model.py \
+  --model fuel_moisture_spatial \
+  --tag fuel_moisture_spatial-v<version> \
+  --repo Cade417/ShowMeFire-Models
+```
+
+Import downloads into a temporary directory and verifies all declared assets,
+checksums, the static schema/grid, and the ONNX smoke output before registering
+server-side beta. A failed import does not alter stable production state.
+
+Review beta/shadow results, then promote the server-side version printed by
+the import command:
+
+```bash
+python pipelines/promote_model.py \
+  --model fuel_moisture_spatial \
+  --version <server-beta-version>
+```
+
+Promotion switches the ONNX model and static bundle as one registry entry.
+The forecast generators then attempt spatial P50 inference. Any failure keeps
+their existing XGBoost result for that forecast.
+
+Check runtime state:
+
+```bash
+curl http://localhost:8000/api/model/spatial/diagnostics
+```
+
+Important fields are `available`, `fallback`, `fallback_reason`,
+`last_success`, `inference_ms`, `bundle`, and `feature_set`.
+
+## Fallback and rollback
+
+Spatial inference falls back to XGBoost when:
+
+- no stable spatial asset contract exists;
+- an asset checksum, schema, or grid fingerprint differs;
+- the matching RTMA anchor is absent;
+- fewer than three causal station FM observations are available;
+- HRRR sequence length differs from the exported model;
+- ONNX Runtime fails or returns non-finite/crossed quantiles.
+
+Fallback is safe but should be investigated through the diagnostics endpoint
+and API logs.
+
+To roll back, import the previously known-good GitHub release as a new beta and
+promote the newly assigned server beta version. Do not edit registry JSON or
+swap individual model/bundle files manually.
+
+## Refresh and retraining cadence
+
+- Ingest/synchronize observations and weather at least weekly.
+- Retrain the station sequence model approximately monthly after meaningful
+  new coverage accumulates.
+- Run the full spatial ablation quarterly or after substantial new seasonal
+  coverage.
+- Review Annual NLCD and LANDFIRE releases annually.
+- Refresh 3DEP only when a meaningful updated domain mosaic is available.
+
+Every static-source refresh gets a new source release label and bundle version
+and repeats steps 6–10. Never place a new static bundle under an old model.
+
+## Troubleshooting
+
+### `source products missing`
+
+All six products must be present in `source_manifest.json`. Re-run
+`download_sources.py` with the missing `--*-file` or `--*-url` option.
+
+### ZIP contains more than one GeoTIFF
+
+Extract/mosaic the provider archive outside the script, then pass the final
+single-band mosaic through `--*-file`.
+
+### Static checksum or grid mismatch
+
+Do not edit a built NetCDF or manifest. Rebuild with a new bundle version and
+rebuild every tensor/checkpoint that references it.
+
+### Spatial gate exits `2`
+
+Review coverage and baseline reports. Continue using the station/XGBoost path;
+do not force a production run.
+
+### CUDA is unavailable
+
+Reinstall PyTorch from the correct CUDA index and verify the NVIDIA driver.
+Do not assume plain `pip install torch` installed a CUDA wheel.
+
+### Out of GPU memory
+
+Reduce `--batch-size` from `2` to `1`. Do not change the canonical grid or
+model width without treating it as a new experiment and rerunning ablations.
+
+### Import succeeds but forecasts fall back
+
+Check `/api/model/spatial/diagnostics`, then verify RTMA for the initialization
+hour, station count, HRRR step count, and the active asset checksums.
+
+### ONNX parity fails
+
+Keep the PyTorch checkpoint as an unregistered experiment. Do not publish or
+promote it. Investigate unsupported operations or numerical differences first.

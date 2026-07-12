@@ -14,7 +14,7 @@ from models.versioning import promote, get_model_entry
 
 def main():
     parser = argparse.ArgumentParser(description="Promote a beta model to stable")
-    parser.add_argument("--model", required=True, choices=["fuel_moisture", "fire_danger"],
+    parser.add_argument("--model", required=True, choices=["fuel_moisture", "fire_danger", "fuel_moisture_spatial"],
                          help="Which model type to promote")
     parser.add_argument("--version", default=None,
                          help="Beta version to promote (defaults to whatever is currently in beta)")

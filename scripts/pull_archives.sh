@@ -42,7 +42,7 @@ ZIPS_DIR="$DATA_ROOT/archive_zips"
 mkdir -p "$ZIPS_DIR"
 
 echo "Pulling ${SSH_TARGET}:${REMOTE_ARCHIVE_DIR} -> ${ZIPS_DIR}/"
-rsync -av --inplace --partial --progress \
+rsync -av --partial --delay-updates --progress \
   -e ssh \
   "${SSH_TARGET}:${REMOTE_ARCHIVE_DIR}" \
   "${ZIPS_DIR}/"

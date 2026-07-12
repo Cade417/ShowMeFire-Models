@@ -4,7 +4,8 @@ locations the training pipeline expects, under SMF_DATA_ROOT.
 
 Routes each entry by filename pattern into:
 
-    *.nc                     -> cache/hrrr/
+    rtma_*.nc                -> cache/rtma/
+    other *.nc               -> cache/hrrr/
     raw_data_*.json          -> archive/raw_data/
     station_forecasts_*.json -> archive/forecasts/
 
@@ -28,6 +29,7 @@ import paths
 
 ARCHIVE_ZIPS_DIR = paths.ARCHIVE_ZIPS_DIR
 DESTINATIONS = [
+    (lambda name: name.startswith("rtma_") and name.endswith(".nc"), paths.CACHE_RTMA_DIR),
     (lambda name: name.endswith(".nc"), paths.CACHE_HRRR_DIR),
     (lambda name: name.startswith("raw_data_") and name.endswith(".json"), paths.ARCHIVE_RAW_DATA_DIR),
     (lambda name: name.startswith("station_forecasts_") and name.endswith(".json"), paths.ARCHIVE_FORECASTS_DIR),
