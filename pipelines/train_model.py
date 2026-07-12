@@ -1,6 +1,5 @@
 import pandas as pd
 import xgboost as xgb
-from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error, r2_score
 import matplotlib.pyplot as plt
 import os
@@ -14,7 +13,8 @@ import paths
 
 def train_fuel_moisture_model(channel="beta", bump="patch"):
     # 2. Load Data
-    df = pd.read_csv(paths.TRAINING_DATA_DIR / 'final_training_data.csv')
+    df = pd.read_csv(paths.TRAINING_DATA_DIR / 'final_training_data.csv', parse_dates=['obs_time'])
+    df = df.sort_values('obs_time')
     
     # 3. Define Features and Target
     features = [
@@ -43,8 +43,11 @@ def train_fuel_moisture_model(channel="beta", bump="patch"):
     X = df[features_to_use]
     y = df['target_fm']
     
-    # 4. Split into Train/Test sets
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    # 4. Split into Train/Test sets chronologically (avoids leaking rolling-window
+    # features across adjacent timestamps, which a random split would do).
+    split_idx = int(len(df) * 0.8)
+    X_train, X_test = X.iloc[:split_idx], X.iloc[split_idx:]
+    y_train, y_test = y.iloc[:split_idx], y.iloc[split_idx:]
     
     # 5. Initialize and Train XGBoost
     model = xgb.XGBRegressor(

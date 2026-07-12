@@ -7,7 +7,7 @@ import os
 
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from core.database import get_db_path
+from core.database import get_db_path, init_database
 import paths
 
 def clear_tables():
@@ -74,5 +74,6 @@ def ingest_archive():
     conn.close()
 
 if __name__ == "__main__":
+    init_database() # Ensure schema exists before touching tables
     clear_tables() # Run the clear function first
     ingest_archive()
