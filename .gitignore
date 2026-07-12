@@ -1,0 +1,12 @@
+# Training data - never tracked. Lives under SMF_DATA_ROOT (defaults to ./data).
+/data/
+
+__pycache__/
+*.pyc
+.DS_Store
+
+venv/
+.venv/
+*.egg-info/
+
+.env

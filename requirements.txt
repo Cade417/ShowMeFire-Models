@@ -1,0 +1,25 @@
+# Trimmed from api/requirements.txt to what training actually needs.
+# Serving-only deps (fastapi, uvicorn, discord.js-adjacent, boto3/R2, apscheduler, etc.) are intentionally excluded.
+xgboost==3.1.2
+scikit-learn==1.7.2
+pandas==2.3.3
+numpy==2.2.6
+xarray==2025.6.1
+netCDF4==1.7.3
+cfgrib==0.9.15.1
+eccodes==2.44.0
+eccodeslib==2.44.1.8
+herbie==1.0b2
+herbie-data==2025.12.0
+python-dotenv==1.2.1
+
+# Pulled in transitively by forecast/firedangermodel.py's map-generation code
+# (kept in the same file as its training code; not split out for this repo).
+matplotlib==3.10.7
+seaborn==0.13.2
+scipy==1.15.3
+Cartopy==0.25.0
+geopandas==1.1.1
+shapely==2.1.2
+CairoSVG==2.8.2
+cairocffi==1.7.1
