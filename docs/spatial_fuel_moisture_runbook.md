@@ -148,8 +148,10 @@ compacted. New ZIPs intentionally contain no RTMA.
 
 ## 4. Backfill RTMA on the training machine
 
-Historical RTMA storage belongs under `SMF_DATA_ROOT`. Discover the exact
-anchors required by local HRRR initialization filenames:
+Historical RTMA storage belongs under `SMF_DATA_ROOT`. For each local HRRR run,
+the default teacher window downloads initialization minus 12 hours through the
+final HRRR valid hour. A 12z f04-f15 run therefore requires 28 analyses, 00z
+through 03z the next day. Overlapping hours are downloaded only once:
 
 ```bash
 python scripts/backfill_rtma_for_hrrr.py --dry-run
@@ -157,9 +159,10 @@ python scripts/backfill_rtma_for_hrrr.py --limit 2
 python scripts/backfill_rtma_for_hrrr.py
 ```
 
-The command deduplicates HRRR run timestamps, validates RTMA extracted from
-legacy ZIPs, and downloads only missing matching analyses. It does not fetch
-all 24 hours of every day.
+The command reads HRRR valid times, validates RTMA extracted from legacy ZIPs,
+and reports existing/missing analyses plus estimated storage. `--window anchor`
+retains the old one-analysis behavior for diagnostics; training requires the
+default `--window teacher` data.
 
 Optional filters:
 
@@ -168,9 +171,10 @@ python scripts/backfill_rtma_for_hrrr.py --start 2026-01-01 --end 2026-03-31
 python scripts/backfill_rtma_for_hrrr.py --force --limit 2
 ```
 
-The resumable manifest is
+The resumable schema-v2 manifest is
 `$SMF_DATA_ROOT/cache/rtma/backfill_manifest.json`. A full run exits nonzero
-when a required selected anchor remains unresolved. `--limit` applies only to
+when a required selected analysis remains unresolved. It records run windows
+separately from globally deduplicated analyses and migrates v1 anchors. `--limit` applies only to
 the selected missing/forced work and is intended for smoke testing.
 
 ## 5. Build aligned station data and required baselines
@@ -182,6 +186,25 @@ python spatial/evaluate_baselines.py
 python spatial/train_station_sequence.py
 python spatial/check_spatial_gate.py
 ```
+
+After the spatial gate succeeds, build teacher/student tensors, train an
+identical non-distilled control and distilled candidate, and create the
+held-out realized-weather association report:
+
+```bash
+python spatial/build_spatial_tensors.py --static-bundle "$STATIC_BUNDLE"
+python spatial/train_spatial.py --static-bundle "$STATIC_BUNDLE" --no-distillation
+python spatial/train_spatial.py --static-bundle "$STATIC_BUNDLE"
+python spatial/compare_distillation.py --feature-set all
+python spatial/report_realized_weather.py --static-bundle "$STATIC_BUNDLE"
+python spatial/export_onnx.py --checkpoint models/fuel_moisture_spatial_all_distilled.pt \
+  --sample "$SMF_DATA_ROOT/aligned/spatial_tensors/<sample>.npz" --static-bundle "$STATIC_BUNDLE"
+```
+
+The realized `+1..+15` RTMA sequence is training-only. Only the HRRR student is
+exported. Reports describe associations and forecast-error patterns, never
+physical causation. Production loads 13 causal RTMA frames, fills at most two
+gaps from an earlier frame, and falls back to XGBoost on a third gap.
 
 Review:
 
@@ -409,7 +432,7 @@ Spatial inference falls back to XGBoost when:
 
 - no stable spatial asset contract exists;
 - an asset checksum, schema, or grid fingerprint differs;
-- the matching RTMA anchor is absent;
+- more than two of the 13 causal RTMA history frames are absent;
 - fewer than three causal station FM observations are available;
 - HRRR sequence length differs from the exported model;
 - ONNX Runtime fails or returns non-finite/crossed quantiles.

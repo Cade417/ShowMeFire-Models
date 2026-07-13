@@ -11,7 +11,7 @@ import xarray as xr
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import paths
-from spatial.model import SpatialQuantileModel
+from spatial.model import StudentExport, TeacherStudentSpatialModel
 from spatial.static_inputs import load_static_inputs
 
 
@@ -20,12 +20,17 @@ def predict(checkpoint_path: Path, tensor_path: Path, static_bundle: Path):
     scont, scat, loaded_contract = load_static_inputs(static_bundle, contract["feature_set"])
     if loaded_contract["bundle_sha256"] != contract["bundle_sha256"]: raise ValueError("static bundle mismatch")
     with np.load(tensor_path) as item:
-        dynamic = item["dynamic_sequence"].astype("float32"); physics = item["physics"].astype("float32"); metadata = json.loads(str(item["metadata"]))
-    model = SpatialQuantileModel(checkpoint["dynamic_channels"], checkpoint["static_continuous_channels"], checkpoint["category_sizes"], embedding_dims=checkpoint["embedding_dims"])
-    model.load_state_dict(checkpoint["state_dict"]); model.eval(); normalized = (dynamic - checkpoint["dynamic_mean"]) / checkpoint["dynamic_std"]
-    with torch.no_grad(): output = model(torch.from_numpy(normalized[None]), torch.from_numpy(scont[None]), torch.from_numpy(scat[None]), torch.from_numpy(physics[None])).numpy()[0]
+        antecedent = item["antecedent_rtma"].astype("float32"); hrrr = item["hrrr_forecast"].astype("float32")
+        current = item["current_fm_state"].astype("float32"); physics = item["physics_trajectory"].astype("float32"); metadata = json.loads(str(item["metadata"]))
+    full = TeacherStudentSpatialModel(checkpoint["static_continuous_channels"], checkpoint["category_sizes"], checkpoint.get("hidden_channels", 32), checkpoint["embedding_dims"])
+    full.load_state_dict(checkpoint["state_dict"]); model = StudentExport(full).eval()
+    def normalized(values, name):
+        contract = checkpoint["normalizers"][name]; return (values - contract["mean"]) / contract["std"]
+    with torch.no_grad():
+        output = model(torch.from_numpy(normalized(antecedent, "antecedent")[None]), torch.from_numpy(normalized(hrrr, "hrrr")[None]),
+                       torch.from_numpy(current[None]), torch.from_numpy(scont[None]), torch.from_numpy(scat[None]), torch.from_numpy(physics[None])).numpy()[0]
     with xr.open_dataset(static_bundle) as static_ds: latitude, longitude = static_ds.latitude.values, static_ds.longitude.values
-    channels = metadata["dynamic_channels"]; distance = dynamic[0, channels.index("nearest_station_distance_deg")]; effective = dynamic[0, channels.index("effective_station_count")]
+    distance = current[3]; effective = current[4]
     width = np.maximum(0, output[:, 2] - output[:, 0]); confidence = np.exp(-distance[None] / 2) / (1 + width / 10)
     ds = xr.Dataset({"fm_p10": (("lead", "y", "x"), output[:, 0]), "fm_p50": (("lead", "y", "x"), output[:, 1]), "fm_p90": (("lead", "y", "x"), output[:, 2]),
                      "confidence": (("lead", "y", "x"), confidence), "nearest_station_distance_deg": (("y", "x"), distance), "effective_station_count": (("y", "x"), effective)},

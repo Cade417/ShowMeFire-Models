@@ -12,7 +12,7 @@ from scripts import backfill_rtma_for_hrrr as backfill
 
 
 def args(hrrr_dir, **overrides):
-    values = {"start": None, "end": None, "limit": None, "hrrr_dir": str(hrrr_dir), "dry_run": False, "force": False}
+    values = {"start": None, "end": None, "limit": None, "hrrr_dir": str(hrrr_dir), "dry_run": False, "force": False, "window": "anchor"}
     values.update(overrides); return SimpleNamespace(**values)
 
 
@@ -49,7 +49,8 @@ class RTMABackfillTests(unittest.TestCase):
                 self.assertEqual(backfill.run(args(hrrr), fetcher, manifest), 0)
                 self.assertEqual(backfill.run(args(hrrr), fetcher, manifest), 0)
             self.assertEqual(len(calls), 2)
-            records = json.loads(manifest.read_text())["runs"]
+            document = json.loads(manifest.read_text()); records = document["analyses"]
+            self.assertEqual(document["version"], 2)
             self.assertEqual(len(records), 2); self.assertTrue(all(record["status"] == "complete" for record in records.values()))
 
     def test_unavailable_anchor_is_recorded_and_returns_nonzero(self):
@@ -59,8 +60,26 @@ class RTMABackfillTests(unittest.TestCase):
             def unavailable(*_): raise FileNotFoundError("404 not found")
             with patch.object(backfill.paths, "CACHE_RTMA_DIR", cache):
                 self.assertEqual(backfill.run(args(hrrr), unavailable, manifest), 1)
-            record = next(iter(json.loads(manifest.read_text())["runs"].values()))
+            record = next(iter(json.loads(manifest.read_text())["analyses"].values()))
             self.assertEqual(record["error_class"], "unavailable"); self.assertEqual(record["attempts"], 1)
+
+    def test_teacher_window_has_28_hourly_analyses_for_f04_f15(self):
+        with tempfile.TemporaryDirectory() as root:
+            root = Path(root); path = root / "hrrr_20260712_12z_f04-15.nc"; path.touch()
+            requirement = next(iter(backfill.derive_requirements(backfill.discover_hrrr_runs(root), "teacher").values()))
+            self.assertEqual(len(requirement["antecedent"]), 13)
+            self.assertEqual(len(requirement["realized"]), 15)
+            self.assertEqual(len(requirement["analyses"]), 28)
+            self.assertEqual(requirement["analyses"][0].hour, 0)
+            self.assertEqual(requirement["analyses"][-1].hour, 3)
+
+    def test_v1_manifest_migrates_complete_anchor_to_analysis(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root) / "manifest.json"
+            path.write_text(json.dumps({"version": 1, "runs": {"2026-07-12T12:00:00+00:00": {"status": "complete", "attempts": 1}}}))
+            value = backfill.read_manifest(path)
+            self.assertEqual(value["version"], 2)
+            self.assertEqual(value["analyses"]["2026-07-12T12:00:00+00:00"]["status"], "complete")
 
 
 if __name__ == "__main__": unittest.main()

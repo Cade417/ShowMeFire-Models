@@ -53,9 +53,9 @@ python pipelines/train_model.py         # registers beta by default; review befo
 
 ## RTMA + sequence fuel-moisture pipeline
 
-After production HRRR/Synoptic archives have been pulled, backfill the matching
-RTMA anchors locally and run the additive pipeline (the existing model stays
-untouched):
+After production HRRR/Synoptic archives have been pulled, backfill the causal
+and realized RTMA teacher windows locally. The default window is init-12h
+through the final HRRR valid hour (28 unique hours for a 12z f04-f15 run):
 
 ```bash
 python scripts/backfill_rtma_for_hrrr.py --dry-run
@@ -74,6 +74,11 @@ python spatial/check_spatial_gate.py
 
 # Run the static-bundle workflow below only after the gate succeeds.
 ```
+
+The tensor builder separates 13 causal RTMA frames, 15 future realized RTMA
+frames (training-only), and HRRR f04-f15. Train both the `--no-distillation`
+control and default teacher-distilled candidate. `spatial/export_onnx.py`
+exports only the HRRR student; future RTMA can never be an inference input.
 
 Fuel-moisture loss and metrics are always masked to real station observations.
 The statewide output includes quantiles, nearest-station distance, effective
