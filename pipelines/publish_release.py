@@ -73,7 +73,7 @@ def publish(model_type, version=None, repo=None):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Publish a beta model candidate as a GitHub pre-release")
-    parser.add_argument("--model", required=True, choices=["fuel_moisture", "fire_danger", "fuel_moisture_spatial"])
+    parser.add_argument("--model", required=True, choices=["fuel_moisture", "fire_danger", "fuel_moisture_spatial", "fire_behavior_static"])
     parser.add_argument("--version", default=None, help="Beta version to publish (defaults to the current beta)")
     parser.add_argument("--repo", default=None, help="owner/repo (defaults to SMF_GITHUB_REPO env var)")
     args = parser.parse_args()

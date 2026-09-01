@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import paths
 
 BBOX = (-96.8, 34.8, -88.1, 41.8)
-PRODUCTS = ("dem", "nlcd_class", "nlcd_confidence", "fbfm40", "fvt", "canopy_cover")
+PRODUCTS = ("dem", "nlcd_class", "nlcd_confidence", "fbfm40", "fvt", "canopy_cover", "canopy_height")
 
 
 def _sha(path):
