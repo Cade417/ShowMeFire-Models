@@ -33,6 +33,12 @@ SOURCE_NAMES = {
     "canopy_cover_pct": "canopy_cover",
     "canopy_height_m": "canopy_height",
 }
+SOURCE_UNITS = {
+    "dem": "m",
+    "fbfm40": "code",
+    "canopy_cover": "percent",
+    "canopy_height": "m",
+}
 
 
 def _hrrr_crs(ds):
@@ -94,6 +100,30 @@ def build(hrrr_path: Path, version: str):
     missing = set(SOURCE_NAMES.values()) - set(products)
     if missing:
         raise ValueError(f"source products missing for fire behavior bundle: {sorted(missing)}")
+    landfire_releases = {
+        products[name].get("source_release")
+        for name in ("fbfm40", "canopy_cover", "canopy_height")
+    }
+    if None in landfire_releases or len(landfire_releases) != 1:
+        raise ValueError(
+            "FBFM40, canopy cover, and canopy height must come from the same "
+            "declared LANDFIRE release"
+        )
+    for product, expected_units in SOURCE_UNITS.items():
+        actual_units = products[product].get("units")
+        if actual_units != expected_units:
+            raise ValueError(
+                f"{product} source units must be {expected_units!r}, got {actual_units!r}; "
+                "convert the source raster before building"
+            )
+        source_path = Path(products[product]["path"])
+        if not source_path.is_file():
+            raise FileNotFoundError(f"{product} source raster not found: {source_path}")
+        if sha256_file(source_path) != products[product].get("sha256"):
+            raise ValueError(f"{product} source checksum differs from source_manifest.json")
+    if not hrrr_path.is_file():
+        raise FileNotFoundError(f"representative HRRR NetCDF not found: {hrrr_path}")
+
     grid = reference_grid(hrrr_path)
     raw = {}
     for channel, product in SOURCE_NAMES.items():
@@ -108,9 +138,20 @@ def build(hrrr_path: Path, version: str):
     dzdy, dzdx = np.gradient(elevation, dy, dx)
     slope = np.degrees(np.arctan(np.hypot(dzdx, dzdy)))
     aspect = np.arctan2(-dzdx, dzdy)
-    valid = np.isfinite(elevation)
-    fuel_codes = np.rint(raw["fuel_model_fbfm40"]).astype("int32")
-    fuel_codes[~np.isfinite(raw["fuel_model_fbfm40"])] = 0
+    finite_fuel = np.isfinite(raw["fuel_model_fbfm40"])
+    fuel_codes = np.zeros(raw["fuel_model_fbfm40"].shape, dtype="int32")
+    fuel_codes[finite_fuel] = np.rint(raw["fuel_model_fbfm40"][finite_fuel]).astype("int32")
+    valid = (
+        np.isfinite(elevation)
+        & np.isfinite(slope)
+        & np.isfinite(aspect)
+        & finite_fuel
+        & np.isfinite(raw["canopy_cover_pct"])
+        & np.isfinite(raw["canopy_height_m"])
+        & (raw["canopy_cover_pct"] >= 0.0)
+        & (raw["canopy_cover_pct"] <= 100.0)
+        & (raw["canopy_height_m"] >= 0.0)
+    )
     continuous = {
         "elevation_m": elevation,
         "slope_degrees": slope,
@@ -139,6 +180,20 @@ def build(hrrr_path: Path, version: str):
             "bbox": BBOX,
         },
     )
+    units = {
+        "elevation_m": "m",
+        "slope_degrees": "degrees",
+        "aspect_sin": "unitless",
+        "aspect_cos": "unitless",
+        "canopy_cover_pct": "percent",
+        "canopy_height_m": "m",
+        "latitude": "degrees_north",
+        "longitude": "degrees_east",
+        "static_valid_mask": "1",
+        "fuel_model_fbfm40": "code",
+    }
+    for name, value in units.items():
+        ds[name].attrs["units"] = value
     bundle = paths.STATIC_BUNDLE_DIR / f"fire_behavior_static_{version}.nc"
     if bundle.exists():
         raise FileExistsError(f"immutable fire behavior bundle already exists: {bundle}")
@@ -157,11 +212,16 @@ def build(hrrr_path: Path, version: str):
         "categorical_channels": list(CATEGORICAL_CHANNELS),
         "normalization": stats,
         "source_manifest": source_manifest,
+        "reference_hrrr": {
+            "path": str(hrrr_path.resolve()),
+            "sha256": sha256_file(hrrr_path),
+        },
         "built_at": datetime.now(timezone.utc).isoformat(),
     }
     manifest_path = bundle.with_suffix(".json")
     manifest_path.write_text(json.dumps(manifest, indent=2))
-    validate_bundle(bundle, manifest_path)
+    manifest = validate_bundle(bundle, manifest_path)
+    manifest_path.write_text(json.dumps(manifest, indent=2))
     print(bundle)
     return bundle
 

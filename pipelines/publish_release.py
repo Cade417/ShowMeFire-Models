@@ -30,11 +30,15 @@ def publish(model_type, version=None, repo=None):
     entry = get_model_entry(model_type)
     beta = entry.get("beta")
     if not beta:
-        raise SystemExit(f"No beta candidate registered for {model_type!r} - train one first (pipelines/train_model.py)")
+        hint = (
+            "run pipelines/register_fire_behavior_static.py first"
+            if model_type == "fire_behavior_static"
+            else "train one first"
+        )
+        raise SystemExit(f"No beta candidate registered for {model_type!r} - {hint}")
     if version and beta["version"] != version:
         raise SystemExit(f"Requested version {version!r} does not match current beta {beta['version']!r}")
 
-    model_path = load_active_model_path(model_type, channel="beta")
     tag = f"{model_type}-v{beta['version']}"
 
     with tempfile.TemporaryDirectory() as tmp:
@@ -44,9 +48,12 @@ def publish(model_type, version=None, repo=None):
         if beta.get("assets"):
             for role, asset in beta["assets"].items():
                 path = paths.DATA_ROOT / asset["file"]
+                if not path.is_file():
+                    raise SystemExit(f"Registered release asset is missing: {role} -> {path}")
                 asset_paths.append(str(path))
                 published_assets[role] = {**asset, "filename": path.name}
         else:
+            model_path = load_active_model_path(model_type, channel="beta")
             asset_paths.append(str(model_path))
         meta_path.write_text(json.dumps({
             "model_type": model_type,
@@ -54,6 +61,7 @@ def publish(model_type, version=None, repo=None):
             "performance": beta.get("performance", {}),
             "trained_at": beta.get("trained_at"),
             "assets": published_assets,
+            "model_metadata": beta.get("metadata", {}),
         }, indent=2))
 
         cmd = [

@@ -10,12 +10,22 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import requests
+import rasterio
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import paths
 
 BBOX = (-96.8, 34.8, -88.1, 41.8)
 PRODUCTS = ("dem", "nlcd_class", "nlcd_confidence", "fbfm40", "fvt", "canopy_cover", "canopy_height")
+DEFAULT_UNITS = {
+    "dem": "m",
+    "nlcd_class": "code",
+    "nlcd_confidence": "percent",
+    "fbfm40": "code",
+    "fvt": "code",
+    "canopy_cover": "percent",
+    "canopy_height": "m",
+}
 
 
 def _sha(path):
@@ -59,15 +69,44 @@ def _materialize_raster(downloaded: Path, product: str) -> Path:
     return target
 
 
+def _raster_metadata(path: Path):
+    with rasterio.open(path) as src:
+        if src.crs is None:
+            raise ValueError(f"{path} has no CRS")
+        if src.count != 1:
+            raise ValueError(f"{path} must contain exactly one raster band")
+        if src.nodata is None:
+            raise ValueError(f"{path} must declare an explicit nodata value")
+        return {
+            "crs": src.crs.to_string(),
+            "bounds": list(src.bounds),
+            "width": src.width,
+            "height": src.height,
+            "dtype": src.dtypes[0],
+            "nodata": src.nodata,
+        }
+
+
 def main():
     parser = argparse.ArgumentParser(description="Acquire official static rasters or register local overrides")
     for product in PRODUCTS:
         parser.add_argument(f"--{product.replace('_', '-')}-url")
         parser.add_argument(f"--{product.replace('_', '-')}-file")
+        parser.add_argument(
+            f"--{product.replace('_', '-')}-units",
+            default=DEFAULT_UNITS[product],
+            help=f"Confirmed native units (default: {DEFAULT_UNITS[product]})",
+        )
     parser.add_argument("--discover-3dep", action="store_true")
     parser.add_argument("--release", default="explicit-v1", help="Human-readable source release label")
     args = parser.parse_args()
-    records = {}
+    output = paths.STATIC_SOURCE_DIR / "source_manifest.json"
+    try:
+        existing_manifest = json.loads(output.read_text())
+        records = dict(existing_manifest.get("products") or {})
+    except (FileNotFoundError, json.JSONDecodeError):
+        records = {}
+    updated_products = []
     for product in PRODUCTS:
         local = getattr(args, f"{product}_file")
         url = getattr(args, f"{product}_url")
@@ -81,12 +120,21 @@ def main():
         else:
             continue
         target = _materialize_raster(target, product)
-        records[product] = {"path": str(target), "url": url, "sha256": _sha(target), "size": target.stat().st_size}
+        records[product] = {
+            "path": str(target),
+            "url": url,
+            "sha256": _sha(target),
+            "size": target.stat().st_size,
+            "units": getattr(args, f"{product}_units"),
+            "raster": _raster_metadata(target),
+            "source_release": args.release,
+        }
+        updated_products.append(product)
     if args.discover_3dep and "dem" not in records:
         records["dem_tiles"] = {"urls": discover_3dep_urls(), "note": "Download/mosaic these tiles or pass --dem-file"}
-    manifest = {"release": args.release, "bbox": BBOX, "acquired_at": datetime.now(timezone.utc).isoformat(), "products": records,
+    manifest = {"release": args.release, "bbox": BBOX, "acquired_at": datetime.now(timezone.utc).isoformat(),
+                "updated_products": updated_products, "products": records,
                 "official_sources": {"dem": "USGS 3DEP/TNM", "nlcd": "USGS Annual NLCD/MRLC", "landfire": "LANDFIRE Product Service"}}
-    output = paths.STATIC_SOURCE_DIR / "source_manifest.json"
     output.write_text(json.dumps(manifest, indent=2)); print(output)
 
 

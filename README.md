@@ -7,6 +7,10 @@ Windows CUDA setup, training gates, release/import, API activation, rollback,
 and troubleshooting—use the
 [Spatial Fuel-Moisture Operator Runbook](docs/spatial_fuel_moisture_runbook.md).
 
+For the desktop-to-production LANDFIRE/topography workflow used by the
+experimental Rothermel product, use the
+[Observed Rothermel Spread Rate Operator Runbook](docs/observed_spread_rate_runbook.md).
+
 No bulk training data is ever pushed to this repo - see `paths.py`.
 
 ## Setup
@@ -86,8 +90,13 @@ station count, and confidence; RTMA is weather input and never an FM label.
 
 ### Static terrain and fuel bundle
 
-Acquire or register official GeoTIFFs, build one immutable HRRR-grid bundle,
-then reference it from every run tensor:
+This section builds the spatial fuel-moisture ML bundle. It is not the
+fire-behavior bundle used by the Rothermel spread-rate product. For that
+separate asset-only workflow, follow
+[`docs/observed_spread_rate_runbook.md`](docs/observed_spread_rate_runbook.md).
+
+For the spatial ML workflow, acquire or register official GeoTIFFs, build one
+immutable HRRR-grid bundle, then reference it from every run tensor:
 
 ```bash
 python static_features/download_sources.py \
