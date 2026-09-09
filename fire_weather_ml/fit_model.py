@@ -59,6 +59,10 @@ def main():
     print("Fitting the fire_weather_ml XGBoost regressor...")
     bundle = model_bundle.fit(train_panel)
 
+    print("Calibrating the 0-100 ML Fire Weather Risk Score against this model's own predictions...")
+    in_sample_predictions = model_bundle.score(train_panel.dropna(subset=[bundle["label_column"]]), bundle)
+    bundle["risk_calibration"] = model_bundle.calibrate_risk_score(in_sample_predictions)
+
     print(f"Persisting bundle to {args.output_dir}...")
     model_bundle.save(bundle, args.output_dir)
 

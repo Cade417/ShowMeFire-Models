@@ -70,10 +70,53 @@ class ScoreTests(unittest.TestCase):
         self.assertLess(model_mae, naive_mae)
 
 
+class CalibrateRiskScoreTests(unittest.TestCase):
+    def test_percentile_table_spans_0_to_100(self):
+        rng = np.random.default_rng(0)
+        predictions = rng.exponential(scale=0.5, size=1000)  # right-skewed, like the real distribution
+        calibration = model_bundle.calibrate_risk_score(predictions)
+        self.assertEqual(calibration["percentiles"][0], 0)
+        self.assertEqual(calibration["percentiles"][-1], 100)
+        self.assertEqual(len(calibration["values_ch_per_h"]), 101)
+        self.assertEqual(calibration["sample_size"], 1000)
+
+    def test_raises_when_nothing_is_finite(self):
+        with self.assertRaises(ValueError):
+            model_bundle.calibrate_risk_score(np.array([np.nan, np.nan]))
+
+    def test_a_skewed_distribution_still_spreads_evenly_across_0_100(self):
+        # The real motivation: even though raw ch/h values are heavily
+        # right-skewed (most near zero, a long thin tail), the median raw
+        # value must map close to score 50 - percentile rank is even by
+        # construction, regardless of the raw distribution's shape.
+        rng = np.random.default_rng(1)
+        predictions = rng.exponential(scale=0.5, size=5000)
+        calibration = model_bundle.calibrate_risk_score(predictions)
+        median_score = model_bundle.risk_score_0_100(np.median(predictions), calibration)
+        self.assertAlmostEqual(float(median_score), 50.0, delta=2.0)
+
+
+class RiskScore0100Tests(unittest.TestCase):
+    def test_endpoints_map_to_0_and_100(self):
+        calibration = model_bundle.calibrate_risk_score(np.array([0.0, 1.0, 2.0, 3.0, 10.0]))
+        self.assertAlmostEqual(float(model_bundle.risk_score_0_100(0.0, calibration)), 0.0, places=3)
+        self.assertAlmostEqual(float(model_bundle.risk_score_0_100(10.0, calibration)), 100.0, places=3)
+
+    def test_negative_input_is_clipped_to_zero_score(self):
+        calibration = model_bundle.calibrate_risk_score(np.array([0.0, 1.0, 2.0]))
+        self.assertAlmostEqual(float(model_bundle.risk_score_0_100(-5.0, calibration)), 0.0, places=3)
+
+    def test_accepts_an_array(self):
+        calibration = model_bundle.calibrate_risk_score(np.array([0.0, 1.0, 2.0, 3.0, 10.0]))
+        scores = model_bundle.risk_score_0_100(np.array([0.0, 10.0]), calibration)
+        np.testing.assert_allclose(scores, [0.0, 100.0], atol=1e-3)
+
+
 class SaveLoadRoundTripTests(unittest.TestCase):
     def test_save_then_load_produces_matching_predictions(self):
         train = _synthetic_panel(seed=3)
         bundle = model_bundle.fit(train)
+        bundle["risk_calibration"] = model_bundle.calibrate_risk_score(model_bundle.score(train, bundle))
         test = _synthetic_panel(seed=4, n_rows=30)
         original_predictions = model_bundle.score(test, bundle)
 

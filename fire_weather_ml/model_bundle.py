@@ -36,6 +36,10 @@ from fire_weather_ml.features import MODEL_FEATURE_COLUMNS
 DEFAULT_LABEL_COLUMN = "ros_ch_per_h"
 MODEL_ASSET_FILENAME = "fire_weather_ml_model.json"
 METADATA_ASSET_FILENAME = "fire_weather_ml_metadata.json"
+RISK_CALIBRATION_ASSET_FILENAME = "fire_weather_ml_risk_calibration.json"
+
+# 0, 1, 2, ..., 100 - a value at every integer percentile.
+RISK_CALIBRATION_PERCENTILES = list(range(101))
 
 DEFAULT_XGB_PARAMS = {
     "n_estimators": 300,
@@ -97,6 +101,49 @@ def score(panel: pd.DataFrame, bundle: Dict) -> pd.Series:
     return pd.Series(predictions, index=panel.index, name=f"predicted_{bundle['label_column']}")
 
 
+def calibrate_risk_score(predictions) -> Dict:
+    """
+    Builds the percentile lookup table that turns a raw ch/h prediction
+    into a 0-100 "ML Fire Weather Risk Score" - calibrated against this
+    model's OWN prediction distribution on real data, not an arbitrary or
+    physics-derived scale. This matters concretely: this real distribution
+    is heavily right-skewed (on the actual historical panel, p50 is only
+    ~0.07 ch/h and p90 is only ~1.08 ch/h) - reusing a fixed physics-style
+    scale (like api/services/spread_rate.py's own 0-150 ch/h ROS classes,
+    built for more fire-prone climates) would collapse almost everything in
+    Missouri into the bottom bucket, the exact same failure mode the rule-
+    based public category already has. A percentile-rank score sidesteps
+    that entirely: it's evenly distributed across 0-100 by construction,
+    regardless of how skewed the underlying raw values are.
+
+    `predictions` should be this model's own predictions (already clipped
+    at zero) on a real, representative dataset - ideally the same panel it
+    was fit on, so the calibration reflects what this model actually
+    outputs, not an assumption about what it should output.
+    """
+    values = np.clip(np.asarray(predictions, dtype=float), 0.0, None)
+    values = values[np.isfinite(values)]
+    if values.size == 0:
+        raise ValueError("no finite predictions to calibrate a risk score against")
+    percentile_values = np.percentile(values, RISK_CALIBRATION_PERCENTILES)
+    # percentile_values must be non-decreasing for interpolation at score
+    # time to behave (np.percentile already guarantees this, but a repeat
+    # value at both ends of a flat run is fine - np.interp handles ties).
+    return {
+        "percentiles": RISK_CALIBRATION_PERCENTILES,
+        "values_ch_per_h": [float(v) for v in percentile_values],
+        "sample_size": int(values.size),
+        "min_ch_per_h": float(values.min()),
+        "max_ch_per_h": float(values.max()),
+    }
+
+
+def risk_score_0_100(predicted_ch_per_h, calibration: Dict) -> np.ndarray:
+    """Maps raw ch/h prediction(s) to the calibrated 0-100 risk score via linear interpolation against the percentile table."""
+    values = np.clip(np.asarray(predicted_ch_per_h, dtype=float), 0.0, None)
+    return np.interp(values, calibration["values_ch_per_h"], calibration["percentiles"])
+
+
 def save(bundle: Dict, directory: Path) -> None:
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
@@ -109,6 +156,8 @@ def save(bundle: Dict, directory: Path) -> None:
         "dropped_null_label_rows": bundle["dropped_null_label_rows"],
     }
     (directory / METADATA_ASSET_FILENAME).write_text(json.dumps(metadata, indent=2), encoding="utf-8")
+    (directory / RISK_CALIBRATION_ASSET_FILENAME).write_text(
+        json.dumps(bundle["risk_calibration"], indent=2), encoding="utf-8")
 
 
 def load(directory: Path) -> Dict:
@@ -116,10 +165,12 @@ def load(directory: Path) -> Dict:
     metadata = json.loads((directory / METADATA_ASSET_FILENAME).read_text(encoding="utf-8"))
     model = xgb.XGBRegressor()
     model.load_model(directory / MODEL_ASSET_FILENAME)
-    return {"model": model, **metadata}
+    risk_calibration = json.loads((directory / RISK_CALIBRATION_ASSET_FILENAME).read_text(encoding="utf-8"))
+    return {"model": model, "risk_calibration": risk_calibration, **metadata}
 
 
 BUNDLE_ASSET_FILENAMES = {
     "model": MODEL_ASSET_FILENAME,
     "metadata": METADATA_ASSET_FILENAME,
+    "risk_calibration": RISK_CALIBRATION_ASSET_FILENAME,
 }
