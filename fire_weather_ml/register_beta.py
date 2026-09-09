@@ -109,6 +109,16 @@ def main():
             "prospective_shadow_required": True,
         },
     )
+
+    # api/services/fire_weather_ml_shadow.py scores directly from this raw
+    # candidate_dir (SMF_FIRE_WEATHER_ML_BUNDLE), not from the versioned
+    # copy register_trained_model just made under models/versions/ - so the
+    # assigned version string needs writing back here too, or the shadow
+    # module (and the graphics it renders) would have no way to know which
+    # registered version it's actually scoring.
+    (args.candidate_dir / "registered_version.json").write_text(
+        json.dumps({"model_type": "fire_weather_ml", "version": version}, indent=2), encoding="utf-8")
+
     print(json.dumps({"registered_version": version, "channel": "beta", "advisory_only": True,
                       "production_changed": False}, indent=2))
 

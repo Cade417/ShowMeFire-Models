@@ -134,6 +134,12 @@ class MainEndToEndTests(unittest.TestCase):
             self.assertIsNotNone(registered["fire_weather_ml"]["beta"])
             self.assertTrue(registered["fire_weather_ml"]["beta"]["performance"]["advisory_only"])
 
+            version_file = candidate_dir / "registered_version.json"
+            self.assertTrue(version_file.exists())
+            version_record = json.loads(version_file.read_text())
+            self.assertEqual(version_record["model_type"], "fire_weather_ml")
+            self.assertEqual(version_record["version"], registered["fire_weather_ml"]["beta"]["version"])
+
 
 if __name__ == "__main__":
     unittest.main()
