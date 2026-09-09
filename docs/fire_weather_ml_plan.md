@@ -300,6 +300,43 @@ first and enabling it as a separate, deliberate step. The real occurrence
 cross-check still can't run (fire_labels/panel date ranges still don't
 overlap - unchanged from Phase 3, not addressed this phase).
 
+## What this model actually is (clarified after a real gap in scope)
+
+Important correction made mid-project: the original ask was an ML model to
+predict **fire danger** (a continuous alternative to the bucketed public
+category), not a spread-rate emulator specifically. What got built predicts
+rate of spread - a real, physically-grounded fire *behavior* quantity, but
+not by itself a *danger* score, and it was never mapped back to that
+original goal. Spread rate is a legitimate basis for a danger signal
+(faster spread = more dangerous), but the gap between "predicts fire
+behavior" and "answers how dangerous" was never actually closed.
+
+**The concrete bridge, built as a first step**: `api/services/fire_weather_ml_shadow.py`
+now also computes the real public rule-based category (`core/fire_danger.py`,
+unchanged) for the same cells, and reports the continuous ML "Fire Weather
+Risk" (predicted spread rate) range found WITHIN each rule category - in
+the evidence JSON, diagnostics state, manifest, and the rendered graphic.
+
+**Real finding from running this against the full historical panel**: the
+rule-based category is "Low" for **96.3%** of real hours (65,700 of
+68,244) and never once reaches Elevated/Critical/Extreme across the full
+13-month window - because its first check, `fuel_moisture >= 15%`,
+unconditionally forces Low regardless of wind or humidity. Meanwhile the
+continuous ML signal ranges from 0.0 to **6.49 ch/h** *within that single
+"Low" bucket* - e.g. a real hour at CHOM7 (Dec 29 2025, fm=17.5%, RH=67%,
+wind=14.9kts) predicted 6.49 ch/h and was called "Low," sitting right next
+to the mean of the "Moderate" category (1.69 ch/h) - while a calm, humid
+"Low" hour elsewhere predicted 0.0. The bucket compresses real, meaningful
+variation the continuous score actually resolves.
+
+**Not yet done**: this is the comparison infrastructure, not a finished
+danger-score replacement. Real remaining work, explicitly not attempted
+this session: deciding whether the continuous spread-rate signal (or a
+combination with fireline intensity/flame length, both already computed by
+`rothermel_labels.py` but not currently modeled as outputs) should become
+an actual proposed alternative/supplement to the public category - that's
+a real product decision, not something to default into.
+
 ## Phases
 
 1. **Scaffolding** - done.
@@ -309,7 +346,10 @@ overlap - unchanged from Phase 3, not addressed this phase).
    help pure emulation accuracy.
 4. **Registration + shadow-serving** - done (see above). Registered beta
    `0.0.1-beta.1`; shadow-serving code built and tested in `api/` on its
-   own branch, not yet enabled on any running server.
+   own branch, not yet enabled on any running server. Now also reports the
+   continuous Fire Weather Risk signal against the real rule-based
+   category - the concrete first step toward the original "danger" ask,
+   not yet a finished replacement for it.
 
 All four phases are complete for this v1 increment. Real future work:
 enable the shadow on an actual server and let evidence accumulate; get
