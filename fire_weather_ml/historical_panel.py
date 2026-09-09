@@ -116,6 +116,12 @@ def build_historical_panel(
     weather = _derive_per_station_fields(weather)
 
     panel = build_station_panel(weather, static_by_station, precip_by_station)
+    # build_station_panel (Phase 1, panel.py) intentionally narrows its
+    # output to feature/label columns only - lat/lon aren't ML features,
+    # but occurrence_crosscheck.py needs them to match a station to nearby
+    # real fire-occurrence records, so they're carried back in here rather
+    # than widening panel.py's own tested contract.
+    panel = panel.merge(usable_stations[["station_id", "lat", "lon"]], on="station_id", how="left")
 
     labeled_rows = int(panel["ros_ch_per_h"].notna().sum())
     coverage = {

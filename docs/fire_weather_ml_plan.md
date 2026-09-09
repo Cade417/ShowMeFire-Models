@@ -181,18 +181,85 @@ New modules this phase: `static_lookup.py`, `precip_normals.py`,
 integration test using the REAL `risk_fusion` county/precip-normal data
 (small, checked-in, no network needed).
 
+## Phase 3 - real fit + evaluate (done)
+
+Fixed one more real bug on the way: `contract.assign_episodes` compared a
+tz-naive `EPOCH` against the real panel's tz-AWARE `valid_time` (UTC,
+`"...+00:00"`) and raised - Phase 1's synthetic tests never used tz-aware
+timestamps, so this only surfaced against real data. Fixed by normalizing
+tz-aware input to UTC-then-naive before comparing (regression test added).
+
+**Real held-out result** (`training-data/reports/fire_weather_ml_offline_evaluation.json`,
+5-block episode-blocked CV): candidate (all `FEATURE_COLUMNS`, including
+KBDI/GDD) R²=0.942, MAE=0.0564 ch/h. Baseline (weather-only, no KBDI/GDD)
+R²=0.962, MAE=0.0427 ch/h. **`beats_naive_weather_only_baseline` gate:
+fail** - the candidate does not beat the baseline; it's slightly worse.
+
+This is a real, honest, explainable finding, not a bug: the Rothermel
+calculation's true causal inputs (fuel moisture, wind, terrain) are ALL
+already in the baseline feature set - `fm1_pct`/`fm10_pct`/`fm100_pct` are
+literally derived from the same `temp_c`/`rh_pct` the baseline sees, plus
+the real observed 10-hr anchor. Both feature sets already contain
+everything the physics calculation is a function of, so both hit
+R²>=0.94, and KBDI/GDD (which the Rothermel formula never uses at all)
+have no causal channel left to add value on **this specific target**. The
+original design doc's "feature expansion beyond what Rothermel uses" value
+proposition (see above) doesn't hold for pure spread-rate-emulation
+accuracy - it would only matter for a target that actually depends on
+drought/season memory (e.g. real fire behavior/occurrence), which this
+model deliberately doesn't train against. Worth revisiting whether KBDI/GDD
+belong in a pure-emulation model at all, or only in a future broader risk
+score built on top of it - not resolved here, flagged for a future session.
+
+**Real occurrence cross-check attempt** (`occurrence_crosscheck.py`):
+correctly returns `available: False` - `fire_labels_20260808.csv` covers
+2011-01-02 through 2020-12-31, the real historical panel covers 2025-07-14
+through 2026-08-02. **Zero date overlap.** The advisory cross-check this
+design promised genuinely cannot run with what's on disk today; the module
+measures and reports that exact gap rather than fabricating a statistic.
+Revisiting this needs either a re-exported, more recent `fire_labels` CSV,
+or building the panel over 2011-2020 RTMA/station history instead (if that
+history exists) - not attempted this session.
+
+**Real emulation-cost result** (`emulation_cost.py`, 2000-row sample):
+model scoring averages 1.73 microseconds/row; running the real Rothermel
+physics (`rothermel_labels.py`) averages 56.6 microseconds/row - **a real,
+measured 32.7x speedup**. This is the part of the original design's value
+proposition that DOES hold up: whatever this model predicts, it predicts
+it about 33x cheaper than running the actual physics, which matters at
+scale (e.g. a statewide grid instead of 18 stations).
+
+**Registration correctly refused**: `register_beta.py` ran against the real
+fitted candidate (`fit_model.py` output,
+`training-data/models/fire_weather_ml_shadow_candidate/`) and refused with
+`failing gates ['beats_naive_weather_only_baseline']` - the safety gate
+worked exactly as designed, blocking a candidate that doesn't clear its own
+bar rather than registering it anyway.
+
+New modules: `occurrence_crosscheck.py`, `emulation_cost.py`. `evaluate.py`
+now actually computes both (previously permanently-`deferred` stubs) - the
+occurrence gate's *status* stays `deferred` regardless of result (never
+gates, per this model family's design), the cost gate's status reflects
+whether it could be measured (`pass` here). 11 new tests.
+
 ## Phases
 
 1. **Scaffolding** - done.
-2. **Historical data build** - done (see above). Real coverage: 18 stations,
-   68,244 rows, 64,320 labeled, ~13 months.
-3. **Fit + evaluate** - fit against the real panel, run the gates in
-   `evaluate.py`, explicitly compare emulation accuracy and inference cost
-   against running `pyretechnics` directly (the actual point of an ML
-   emulator). Not yet done - next session's work.
-4. **Registration + shadow-serving** - only once Phase 3 passes: register a
-   real beta, add a `fire_weather_ml` branch to
-   `api/models/versioning.py::validate_promotion_candidate`, and build
+2. **Historical data build** - done. Real coverage: 18 stations, 68,244
+   rows, 64,320 labeled, ~13 months.
+3. **Fit + evaluate** - done (see above). Candidate does not currently beat
+   baseline; registration correctly refused. Emulation speedup (32.7x) is
+   real and measured. Occurrence cross-check correctly reports unavailable
+   (no date overlap in the data that exists today).
+4. **Registration + shadow-serving** - blocked on Phase 3's failing gate.
+   Next steps to unblock, for a future session: (a) decide whether to drop
+   KBDI/GDD from this model (they don't help pure emulation accuracy) or
+   redesign the baseline-comparison gate itself (asking a candidate to beat
+   an already-0.96-R² baseline by 5 points may simply be the wrong bar for
+   a near-deterministic physics target), and/or (b) get real occurrence-
+   data date overlap so the advisory cross-check can actually run. Once a
+   candidate passes and is registered, add a `fire_weather_ml` branch to
+   `api/models/versioning.py::validate_promotion_candidate` and build
    `api/services/fire_weather_ml_shadow.py` mirroring
    `risk_fusion_glm_shadow.py`'s pattern.
 

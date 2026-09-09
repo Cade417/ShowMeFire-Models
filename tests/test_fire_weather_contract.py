@@ -27,6 +27,14 @@ class AssignEpisodesTests(unittest.TestCase):
         b = contract.assign_episodes(pd.Series(["2019-01-01T00:00:00", "2020-06-15T00:00:00"]))
         self.assertEqual(a.iloc[0], b.iloc[1])
 
+    def test_handles_tz_aware_timestamps_the_same_as_naive_ones(self):
+        # The real historical panel's valid_time is UTC-aware
+        # ("...+00:00") - this must not raise, and must agree with the
+        # naive form of the same instant.
+        naive = contract.assign_episodes(pd.Series(["2020-06-15T00:00:00"]))
+        aware = contract.assign_episodes(pd.Series(["2020-06-15T00:00:00+00:00"]))
+        self.assertEqual(naive.iloc[0], aware.iloc[0])
+
 
 class AssignBlocksTests(unittest.TestCase):
     def test_produces_contiguous_chronological_blocks(self):

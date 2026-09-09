@@ -29,8 +29,19 @@ EPOCH = pd.Timestamp("2000-01-01")
 
 
 def assign_episodes(timestamps: pd.Series, episode_length_days: int = EPISODE_LENGTH_DAYS) -> pd.Series:
-    """episode_id = hours since a fixed epoch // episode length - stable across panels/date ranges."""
+    """
+    episode_id = hours since a fixed epoch // episode length - stable
+    across panels/date ranges. `timestamps` may be tz-naive or tz-aware
+    (the real historical panel's valid_time is UTC-aware, e.g.
+    "...+00:00"); tz-aware input is converted to UTC then made naive
+    before comparing against EPOCH, so both forms land on the same
+    episode boundaries for the same instant - EPOCH itself isn't given a
+    timezone since it's just a fixed reference point, not a real moment
+    that could be ambiguous.
+    """
     parsed = pd.to_datetime(timestamps)
+    if getattr(parsed.dt, "tz", None) is not None:
+        parsed = parsed.dt.tz_convert("UTC").dt.tz_localize(None)
     hours_since_epoch = (parsed - EPOCH) / pd.Timedelta(hours=1)
     return (hours_since_epoch // (episode_length_days * 24)).astype("int64")
 
