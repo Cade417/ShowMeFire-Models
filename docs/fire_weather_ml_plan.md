@@ -329,13 +329,35 @@ to the mean of the "Moderate" category (1.69 ch/h) - while a calm, humid
 "Low" hour elsewhere predicted 0.0. The bucket compresses real, meaningful
 variation the continuous score actually resolves.
 
-**Not yet done**: this is the comparison infrastructure, not a finished
-danger-score replacement. Real remaining work, explicitly not attempted
-this session: deciding whether the continuous spread-rate signal (or a
-combination with fireline intensity/flame length, both already computed by
-`rothermel_labels.py` but not currently modeled as outputs) should become
-an actual proposed alternative/supplement to the public category - that's
-a real product decision, not something to default into.
+**Follow-up correction**: the comparison graphic above was itself flagged
+as "not actually different" - it was still framed around the old rule's
+categories/spread-rate classes, not a standalone thing. Built in response:
+a genuinely separate **ML Fire Weather Risk Score** product -
+`api/services/fire_weather_ml_shadow.py::_render_risk_score_png`, its own
+map, own continuous 0-100 colorbar, own manifest entry
+(`fire_weather_ml_risk_score`), no discrete classes, no reference to the
+rule-based category or the physics ROS_CLASS scale.
+
+The 0-100 score itself is calibrated (`model_bundle.calibrate_risk_score`/
+`risk_score_0_100`, a new required bundle asset,
+`fire_weather_ml_risk_calibration.json`) against **this model's own real
+prediction distribution**, not a borrowed physics scale - deliberately,
+because that distribution is heavily right-skewed on real data (p50=0.07
+ch/h, p90=1.08 ch/h): reusing a fixed scale built for more extreme fire
+climates (like `spread_rate.py`'s own 0-150 ch/h classes) would collapse
+almost everything into the bottom of the scale too, the exact same failure
+mode being fixed. Percentile rank sidesteps that - it's evenly spread
+across 0-100 by construction regardless of the raw distribution's shape.
+
+Real registered candidate refit with this asset: beta `0.0.1-beta.3`.
+
+**Not yet done**: this is real comparison + standalone-score infrastructure,
+not a finished danger-score replacement decision. Real remaining work,
+explicitly not attempted this session: deciding whether this continuous
+score (or a combination with fireline intensity/flame length, both already
+computed by `rothermel_labels.py` but not currently modeled as outputs)
+should become an actual proposed alternative/supplement to the public
+category - that's a real product decision, not something to default into.
 
 ## Phases
 
