@@ -42,7 +42,16 @@ STATIC_DIR = DATA_ROOT / "static"
 STATIC_SOURCE_DIR = STATIC_DIR / "source"
 STATIC_BUNDLE_DIR = STATIC_DIR / "bundles"
 
+# fire_weather_ml (station-hour physical fire-behavior emulator) - a third,
+# independent model family, trained against the same Rothermel calculation
+# api/services/spread_rate.py runs live, not against fire-occurrence
+# reports. See fire_weather_ml/__init__.py and docs/fire_weather_ml_plan.md.
+FIRE_WEATHER_ML_DIR = DATA_ROOT / "fire_weather_ml"
+FIRE_WEATHER_ML_PANEL = FIRE_WEATHER_ML_DIR / "station_panel.csv"
+FIRE_WEATHER_ML_SPLIT_MANIFEST = REPORTS_DIR / "fire_weather_ml_split_manifest.json"
+FIRE_WEATHER_ML_CANDIDATE_DIR = MODELS_DIR / "fire_weather_ml_shadow_candidate"
+
 for _d in (CACHE_HRRR_DIR, CACHE_RTMA_DIR, ARCHIVE_RAW_DATA_DIR, ARCHIVE_FORECASTS_DIR, ARCHIVE_ZIPS_DIR,
            TRAINING_DATA_DIR, SNAPSHOTS_DIR, MODELS_DIR, PLOTS_DIR, ALIGNED_DIR, REPORTS_DIR,
-           STATIC_SOURCE_DIR, STATIC_BUNDLE_DIR):
+           STATIC_SOURCE_DIR, STATIC_BUNDLE_DIR, FIRE_WEATHER_ML_DIR):
     _d.mkdir(parents=True, exist_ok=True)

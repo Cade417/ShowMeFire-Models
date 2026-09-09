@@ -1,0 +1,8 @@
+# Pyretechnics 2025.5.15 unnecessarily constrains NumPy to 1.24.x.
+# This repo requires NumPy 2.2.x (xgboost/pandas/xarray already pin it), and
+# the exercised Pyretechnics surface-fire API is compatible with it. Install
+# this pinned package without dependency resolution after the primary lock
+# file - mirrors api/requirements.pyretechnics.txt exactly (same library,
+# same version, same reason), used here to independently reproduce the same
+# Rothermel calculation offline for fire_weather_ml's training labels.
+pyretechnics==2025.5.15
