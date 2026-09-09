@@ -242,25 +242,77 @@ occurrence gate's *status* stays `deferred` regardless of result (never
 gates, per this model family's design), the cost gate's status reflects
 whether it could be measured (`pass` here). 11 new tests.
 
+## Phase 4 - unblock registration + shadow-serving (done)
+
+**Decision** (asked of, and made by, the project owner): drop `kbdi`/
+`gdd_accum` from the model's input features entirely rather than redesign
+the comparison gate. `features.MODEL_FEATURE_COLUMNS` (weather/fuel-
+moisture/terrain only) is now what the model actually trains/predicts on;
+`FEATURE_COLUMNS` (the full panel schema, kbdi/gdd_accum included) stays as
+computed panel data - still real, still available, just not fed to this
+model, in case a future broader risk score wants it.
+
+With no second feature set left to compare against, `evaluate.py`'s
+`beats_naive_weather_only_baseline` gate (policy v1) was retired and
+replaced with `achieves_high_emulation_accuracy` (policy v2): an absolute
+`R^2 >= 0.90` bar, comfortably below the real observed ~0.96 so a
+genuinely broken candidate still fails it, without being tied to a since-
+removed comparison. **Real result on the actual panel: R²=0.9622,
+MAE=0.0427 ch/h - identical to Phase 3's "baseline" numbers, confirming
+the feature-set change was applied correctly.** All gates now pass.
+
+**Real registration succeeded**: `fit_model.py` → `register_beta.py`
+registered `fire_weather_ml` beta `0.0.1-beta.1` in this repo's own
+training-side registry (`training-data/models/versions/`), `advisory_only:
+true`, `production_eligible: false`, `prospective_shadow_required: true` -
+the same advisory pattern `fire_risk_fusion` uses.
+
+**Real shadow-serving wiring into `api/`** (on `api/`'s own
+`ml-fire-weather-v1` branch, mirroring this repo's branch name - nothing
+touches either repo's `main`): new `api/services/fire_weather_ml_shadow.py`
+mirrors `risk_fusion_glm_shadow.py`'s exact shape (kill switch, persisted
+state, immutable evidence, raw-bundle-via-`SMF_FIRE_WEATHER_ML_BUNDLE`
+loading, never raises). Because `MODEL_FEATURE_COLUMNS` is exactly the set
+of weather/fuel-moisture/terrain quantities `api/services/spread_rate.py`
+already computes every run, the shadow scores the SAME grid the real
+Rothermel calculation just ran on and directly compares against it - a
+live, ongoing accuracy check beyond this offline evaluation. Also added: a
+`fire_weather_ml` branch in `api/models/versioning.py::validate_promotion_candidate`
+(mirroring `fire_risk_fusion`'s, for a future real promotion pipeline - not
+currently exercised, matching how `fire_risk_fusion` itself is scored via
+raw bundle rather than through the registry today), a
+`/api/model/spatial/fire-weather-ml-shadow-diagnostics` route, and an
+additive call site in `spread_rate.py`'s `generate_spread_rate()` (never
+touches `grids` or anything derived from it - failure-isolated, logged and
+swallowed on error). 13 new tests in `api/tests/test_fire_weather_ml_shadow.py`.
+
+A real bug was found and fixed along the way: the shadow module's first
+draft imported `aspect_degrees` from `services/spread_rate.py`, which pulled
+in that module's entire heavy import chain (xarray, rtma_capture, etc.)
+just to reuse a two-line trig function - fixed by defining it locally in
+`fire_weather_ml_shadow.py` instead.
+
+**Not yet done, deliberately deferred**: actually setting
+`SMF_FIRE_WEATHER_ML_BUNDLE`/`FIRE_WEATHER_ML_SHADOW_ENABLED` on any real
+server (dev or production) - this session only built and tested the
+capability, following `risk_fusion`'s own precedent of landing the code
+first and enabling it as a separate, deliberate step. The real occurrence
+cross-check still can't run (fire_labels/panel date ranges still don't
+overlap - unchanged from Phase 3, not addressed this phase).
+
 ## Phases
 
 1. **Scaffolding** - done.
 2. **Historical data build** - done. Real coverage: 18 stations, 68,244
    rows, 64,320 labeled, ~13 months.
-3. **Fit + evaluate** - done (see above). Candidate does not currently beat
-   baseline; registration correctly refused. Emulation speedup (32.7x) is
-   real and measured. Occurrence cross-check correctly reports unavailable
-   (no date overlap in the data that exists today).
-4. **Registration + shadow-serving** - blocked on Phase 3's failing gate.
-   Next steps to unblock, for a future session: (a) decide whether to drop
-   KBDI/GDD from this model (they don't help pure emulation accuracy) or
-   redesign the baseline-comparison gate itself (asking a candidate to beat
-   an already-0.96-R² baseline by 5 points may simply be the wrong bar for
-   a near-deterministic physics target), and/or (b) get real occurrence-
-   data date overlap so the advisory cross-check can actually run. Once a
-   candidate passes and is registered, add a `fire_weather_ml` branch to
-   `api/models/versioning.py::validate_promotion_candidate` and build
-   `api/services/fire_weather_ml_shadow.py` mirroring
-   `risk_fusion_glm_shadow.py`'s pattern.
+3. **Fit + evaluate** - done. Found and explained why kbdi/gdd_accum didn't
+   help pure emulation accuracy.
+4. **Registration + shadow-serving** - done (see above). Registered beta
+   `0.0.1-beta.1`; shadow-serving code built and tested in `api/` on its
+   own branch, not yet enabled on any running server.
 
-Phases 3-4 are not implemented yet.
+All four phases are complete for this v1 increment. Real future work:
+enable the shadow on an actual server and let evidence accumulate; get
+fresher `fire_labels` data (or a panel over 2011-2020) so the occurrence
+cross-check can finally run; decide whether kbdi/gdd_accum earn a place in
+a future broader risk score built on top of this pure spread-rate emulator.

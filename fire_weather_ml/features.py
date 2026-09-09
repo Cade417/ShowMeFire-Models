@@ -86,6 +86,20 @@ FEATURE_COLUMNS = (
     "slope_deg", "aspect_deg", "canopy_cover_pct", "canopy_height_m",
 )
 
+# The columns the fire_weather_ml MODEL actually trains/predicts on -
+# narrower than FEATURE_COLUMNS. Phase 3's real held-out evaluation found
+# that adding kbdi/gdd_accum does not improve (in fact slightly hurts)
+# prediction of the Rothermel-computed label: the physics calculation's
+# true causal inputs (fuel moisture, wind, terrain) are already fully
+# present in this narrower set, and Rothermel never uses drought/season
+# memory at all, so there's no causal channel left for kbdi/gdd_accum to
+# add value on THIS target (see docs/fire_weather_ml_plan.md's Phase 3/4
+# sections). kbdi/gdd_accum stay in FEATURE_COLUMNS/the panel schema -
+# they're still real, computed data that may matter for a future broader
+# risk score built on top of pure spread-rate emulation - just not used as
+# model input here.
+MODEL_FEATURE_COLUMNS = tuple(c for c in FEATURE_COLUMNS if c not in ("kbdi", "gdd_accum"))
+
 
 def assemble_features(
     weather: pd.DataFrame,

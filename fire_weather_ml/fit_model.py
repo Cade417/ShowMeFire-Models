@@ -24,7 +24,7 @@ sys.path.insert(0, str(REPO_ROOT))
 
 import paths
 from fire_weather_ml import contract, model_bundle
-from fire_weather_ml.features import FEATURE_COLUMNS
+from fire_weather_ml.features import MODEL_FEATURE_COLUMNS
 
 
 def build_contract(train_panel: pd.DataFrame) -> Dict:
@@ -36,7 +36,7 @@ def build_contract(train_panel: pd.DataFrame) -> Dict:
     """
     split_manifest = contract.create_manifest(contract.add_split_columns(train_panel))
     return {
-        "feature_columns": list(FEATURE_COLUMNS),
+        "feature_columns": list(MODEL_FEATURE_COLUMNS),
         "feature_module_sha256": model_bundle.sha256_file(REPO_ROOT / "fire_weather_ml" / "features.py"),
         "label_module_sha256": model_bundle.sha256_file(REPO_ROOT / "fire_weather_ml" / "rothermel_labels.py"),
         "label_column": model_bundle.DEFAULT_LABEL_COLUMN,

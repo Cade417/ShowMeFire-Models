@@ -42,7 +42,10 @@ class FitTests(unittest.TestCase):
             model_bundle.fit(panel)
 
     def test_raises_on_missing_feature_column(self):
-        panel = _synthetic_panel().drop(columns=["kbdi"])
+        # kbdi/gdd_accum aren't in MODEL_FEATURE_COLUMNS (fit()'s default) -
+        # drop one that actually is, so this test still exercises the
+        # missing-column check it's meant to.
+        panel = _synthetic_panel().drop(columns=["fm10_pct"])
         with self.assertRaises(ValueError):
             model_bundle.fit(panel)
 

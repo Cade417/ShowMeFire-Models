@@ -14,10 +14,10 @@ def _valid_report(**overrides):
         "advisory_only": True,
         "model_family": "xgboost_regressor",
         "row_count": 1000,
-        "scores": {"candidate_mae": 1.0, "candidate_r2": 0.6, "baseline_mae": 1.5, "baseline_r2": 0.4},
+        "scores": {"candidate_mae": 1.0, "candidate_r2": 0.96},
         "gates": [
             {"name": "sufficient_test_rows", "status": "pass"},
-            {"name": "beats_naive_weather_only_baseline", "status": "pass"},
+            {"name": "achieves_high_emulation_accuracy", "status": "pass"},
             {"name": "fire_occurrence_ranking_advisory", "status": "deferred"},
             {"name": "emulation_cost_advantage_documented", "status": "deferred"},
         ],
@@ -55,7 +55,7 @@ class ValidateBetaRegistrationTests(unittest.TestCase):
             candidate_dir = Path(root)
             _write_candidate_bundle(candidate_dir)
             report = _valid_report()
-            report["gates"].append({"name": "beats_naive_weather_only_baseline", "status": "fail"})
+            report["gates"].append({"name": "achieves_high_emulation_accuracy", "status": "fail"})
             with self.assertRaises(RuntimeError):
                 register.validate_beta_registration(candidate_dir, report)
 

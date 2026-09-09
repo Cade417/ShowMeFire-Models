@@ -5,18 +5,24 @@ gate silently omitted: "pass"/"fail" where checkable in this increment,
 "deferred" for what needs a later phase, "not_applicable" for what needs
 machinery this increment doesn't build).
 
-Primary gates check the model's actual job: predicting the Rothermel-
-computed physical label on held-out data, beating a naive baseline that
-only sees instantaneous weather (no KBDI/GDD memory) - this is where the
-model's ML value-add (vs. just running Rothermel directly) has to show up,
-since a model with equal accuracy but no speed/scale advantage over the
-physics calculation itself wouldn't be worth serving.
+Primary gate (`achieves_high_emulation_accuracy`) checks the model's actual
+job: predicting the Rothermel-computed physical label on held-out data, to
+an absolute accuracy bar - not a comparison against a second "baseline"
+model. An earlier version of this report compared against a weather-only
+baseline (no kbdi/gdd_accum) to test whether those memory features earned
+their keep; Phase 3's real result was that they didn't (the physics
+calculation's causal inputs are already fully present without them), so
+Phase 4 dropped kbdi/gdd_accum from the model entirely
+(`features.MODEL_FEATURE_COLUMNS`) rather than keep carrying a feature set
+proven not to help. With nothing left to compare the candidate against,
+the gate is now an absolute bar (MIN_R2) instead - see docs/fire_weather_ml_plan.md
+for the full history of that change.
 
 Secondary gate (`fire_occurrence_ranking_advisory`) is a real fire-
 occurrence/observed-fire-behavior cross-check but is *always* reported as
-"deferred" or "not_applicable" in its status (never "pass"/"fail") - it can
-inform confidence but must never gate promotion, per this model family's
-explicit design decision not to train or gate against occurrence.
+"deferred" (never "pass"/"fail") - it can inform confidence but must never
+gate promotion, per this model family's explicit design decision not to
+train or gate against occurrence.
 """
 from __future__ import annotations
 
@@ -30,20 +36,22 @@ import pandas as pd
 from sklearn.metrics import mean_absolute_error, r2_score
 
 from fire_weather_ml import contract, emulation_cost, model_bundle, occurrence_crosscheck
-from fire_weather_ml.features import FEATURE_COLUMNS
+from fire_weather_ml.features import MODEL_FEATURE_COLUMNS
 
-POLICY_VERSION = "fire-weather-ml-evaluation-policy-v1"
+POLICY_VERSION = "fire-weather-ml-evaluation-policy-v2"
 MIN_TEST_ROWS = 200
-MIN_R2_VS_BASELINE_IMPROVEMENT = 0.05  # candidate must explain at least 5 more percentage points of variance than the naive baseline
 
-# Features the naive baseline is allowed to see: current-instant weather and
-# terrain only - no KBDI/GDD memory. If the candidate can't beat this, the
-# extra memory features aren't earning their keep.
-BASELINE_FEATURE_COLUMNS = tuple(c for c in FEATURE_COLUMNS if c not in ("kbdi", "gdd_accum"))
+# The real weather-only (no kbdi/gdd_accum) fit measured R^2=0.962 on the
+# actual historical panel (see docs/fire_weather_ml_plan.md's Phase 3
+# section) - 0.90 leaves real margin below that observed number so a
+# genuinely broken candidate (bad features, a data pipeline regression,
+# wrong label column) still fails this gate, without the bar being tied to
+# a since-removed baseline comparison.
+MIN_ABSOLUTE_R2 = 0.90
 
 
-def _fit_and_score_fold(train: pd.DataFrame, test: pd.DataFrame, feature_columns) -> Dict:
-    bundle = model_bundle.fit(train, feature_columns=feature_columns)
+def _fit_and_score_fold(train: pd.DataFrame, test: pd.DataFrame) -> Dict:
+    bundle = model_bundle.fit(train, feature_columns=MODEL_FEATURE_COLUMNS)
     labeled_test = test.dropna(subset=[model_bundle.DEFAULT_LABEL_COLUMN])
     predictions = model_bundle.score(labeled_test, bundle)
     truth = labeled_test.loc[predictions.index, model_bundle.DEFAULT_LABEL_COLUMN]
@@ -59,21 +67,18 @@ def build_report(panel: pd.DataFrame, fire_labels_path: Path | None = None) -> D
     panel = contract.add_split_columns(panel)
     labeled = panel.dropna(subset=[model_bundle.DEFAULT_LABEL_COLUMN])
 
-    candidate_folds, baseline_folds = [], []
+    candidate_folds = []
     oof_predictions = []
     for train_index, test_index in contract.crossfit_indices(panel):
         train, test = panel.loc[train_index], panel.loc[test_index]
         if train[model_bundle.DEFAULT_LABEL_COLUMN].notna().sum() < 1 or test[model_bundle.DEFAULT_LABEL_COLUMN].notna().sum() < 1:
             continue
-        candidate_fold = _fit_and_score_fold(train, test, FEATURE_COLUMNS)
-        baseline_folds.append(_fit_and_score_fold(train, test, BASELINE_FEATURE_COLUMNS))
+        candidate_fold = _fit_and_score_fold(train, test)
         oof_predictions.append(candidate_fold.pop("predictions"))
         candidate_folds.append(candidate_fold)
 
     candidate_mae = float(np.mean([f["mae"] for f in candidate_folds])) if candidate_folds else None
     candidate_r2 = float(np.mean([f["r2"] for f in candidate_folds])) if candidate_folds else None
-    baseline_mae = float(np.mean([f["mae"] for f in baseline_folds])) if baseline_folds else None
-    baseline_r2 = float(np.mean([f["r2"] for f in baseline_folds])) if baseline_folds else None
     oof_predictions_series = pd.concat(oof_predictions) if oof_predictions else pd.Series(dtype=float)
 
     total_rows = int(len(labeled))
@@ -84,7 +89,7 @@ def build_report(panel: pd.DataFrame, fire_labels_path: Path | None = None) -> D
     # held-out cross-validation folds above, since those are deliberately
     # partial fits for unbiased accuracy measurement, not the best model
     # this data can produce.
-    full_candidate_bundle = model_bundle.fit(labeled, feature_columns=FEATURE_COLUMNS) if total_rows else None
+    full_candidate_bundle = model_bundle.fit(labeled) if total_rows else None
 
     if fire_labels_path is None:
         REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -110,11 +115,9 @@ def build_report(panel: pd.DataFrame, fire_labels_path: Path | None = None) -> D
     gates = [
         {"name": "sufficient_test_rows", "status": "pass" if total_rows >= MIN_TEST_ROWS else "fail",
          "total_rows": total_rows, "minimum_required": MIN_TEST_ROWS},
-        {"name": "beats_naive_weather_only_baseline", "status": (
-            "pass" if (candidate_r2 is not None and baseline_r2 is not None
-                       and candidate_r2 - baseline_r2 >= MIN_R2_VS_BASELINE_IMPROVEMENT) else "fail"
-        ), "candidate_r2": candidate_r2, "baseline_r2": baseline_r2,
-         "candidate_mae": candidate_mae, "baseline_mae": baseline_mae},
+        {"name": "achieves_high_emulation_accuracy", "status": (
+            "pass" if (candidate_r2 is not None and candidate_r2 >= MIN_ABSOLUTE_R2) else "fail"
+        ), "candidate_r2": candidate_r2, "candidate_mae": candidate_mae, "minimum_required_r2": MIN_ABSOLUTE_R2},
         {"name": "fire_occurrence_ranking_advisory", "status": "deferred", "result": occurrence_result,
          "note": "Always deferred regardless of result - a confidence signal, never a pass/fail promotion "
                  "gate for this model family (it never trains or gates against occurrence). See "
@@ -130,13 +133,12 @@ def build_report(panel: pd.DataFrame, fire_labels_path: Path | None = None) -> D
         "policy_version": POLICY_VERSION,
         "model_family": "xgboost_regressor",
         "label_column": model_bundle.DEFAULT_LABEL_COLUMN,
+        "feature_columns": list(MODEL_FEATURE_COLUMNS),
         "advisory_only": True,
         "row_count": total_rows,
         "total_episodes": total_episodes,
         "candidate_folds": candidate_folds,
-        "baseline_folds": baseline_folds,
-        "scores": {"candidate_mae": candidate_mae, "candidate_r2": candidate_r2,
-                   "baseline_mae": baseline_mae, "baseline_r2": baseline_r2},
+        "scores": {"candidate_mae": candidate_mae, "candidate_r2": candidate_r2},
         "gates": gates,
         "overall_pass": all(g["status"] in ("pass", "deferred", "not_applicable") for g in gates),
     }

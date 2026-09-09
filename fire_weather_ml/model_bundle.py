@@ -14,6 +14,11 @@ target. fireline_intensity_kw_per_m/flame_length_m are available in the
 same panel (see rothermel_labels.py) for a future multi-output model; kept
 single-output for Phase 1 to keep the fit/evaluate/register contract
 simple to reason about first.
+
+Trains on `features.MODEL_FEATURE_COLUMNS` (weather/fuel-moisture/terrain),
+not the full `FEATURE_COLUMNS` panel schema - see that constant's own
+docstring for the real Phase 3 finding that motivated excluding kbdi/
+gdd_accum from what the model actually sees.
 """
 from __future__ import annotations
 
@@ -26,7 +31,7 @@ import numpy as np
 import pandas as pd
 import xgboost as xgb
 
-from fire_weather_ml.features import FEATURE_COLUMNS
+from fire_weather_ml.features import MODEL_FEATURE_COLUMNS
 
 DEFAULT_LABEL_COLUMN = "ros_ch_per_h"
 MODEL_ASSET_FILENAME = "fire_weather_ml_model.json"
@@ -52,7 +57,7 @@ def sha256_file(path: Path) -> str:
 
 def fit(
     train_panel: pd.DataFrame,
-    feature_columns: Sequence[str] = FEATURE_COLUMNS,
+    feature_columns: Sequence[str] = MODEL_FEATURE_COLUMNS,
     label_column: str = DEFAULT_LABEL_COLUMN,
     xgb_params: Dict | None = None,
 ) -> Dict:
