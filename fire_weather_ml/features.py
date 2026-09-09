@@ -12,14 +12,18 @@ KBDI/GDD here are independent implementations (not imports from
 risk_fusion, which has its own KBDI accrual tied to county-day geometry -
 see model-training/docs/fire_weather_ml_plan.md for why this model family
 doesn't share code with risk_fusion) using the standard published formulas.
-Both are Phase 1 scaffolding: correct in shape/formula, not yet validated
-against a real calibrated mean-annual-precipitation source per station
-(risk_fusion/county_precip_normals.json exists as *data*, and could be
-reused as a data input in Phase 2 without importing risk_fusion's code -
-not wired up yet).
+Per-station mean-annual-precipitation normals (KBDI's climate-normal term)
+come from `precip_normals.py`, which reuses risk_fusion/county_precip_normals.json
+as *data* (real 1991-2020 NOAA normals), not by importing risk_fusion's code.
+
+Also home to `derive_fm1_fm10_fm100` and `live_moisture_percent` - Phase 2
+additions for deriving inputs the real historical station data doesn't
+directly observe (see their own docstrings for what's derived vs. observed
+and why).
 """
 from __future__ import annotations
 
+import math
 from typing import Optional
 
 import numpy as np
@@ -110,3 +114,124 @@ def assemble_features(
     features["kbdi"] = kbdi_series(daily_rain_in, max_temp_f, mean_annual_precip_in, initial_kbdi)
     features["gdd_accum"] = gdd_series(weather["temp_c"], initial_accum=initial_gdd)
     return features[list(FEATURE_COLUMNS)]
+
+
+# --- Phase 2: deriving fm1/fm100 and live-fuel moisture the real station
+# history doesn't directly observe ---------------------------------------
+
+NELSON_EMC_MIN_PERCENT = 1.0
+NELSON_EMC_MAX_PERCENT = 40.0
+TAU_1_HR = 1.0
+TAU_10_HR = 10.0
+TAU_100_HR = 100.0
+
+GDD_GREENUP_START = 200.0  # accumulated base-10C degree-days where green-up is assumed to begin
+GDD_GREENUP_FULL = 1000.0  # ...and where it's assumed complete
+LIVE_HERBACEOUS_CURED_PCT = 60.0   # Scott-Burgan L2 (cured) standard scenario value
+LIVE_HERBACEOUS_GREEN_PCT = 120.0  # Scott-Burgan L4 (green) standard scenario value
+LIVE_WOODY_CURED_PCT = 90.0
+LIVE_WOODY_GREEN_PCT = 150.0
+
+
+def nelson_emc(temp_c: np.ndarray, rh: np.ndarray) -> np.ndarray:
+    """
+    Nelson dead-fuel equilibrium moisture content (the standard published
+    formula also independently used in api/services/spread_rate_moisture.py -
+    same equations, separately implemented here per this project's
+    model-training-never-imports-api boundary).
+    """
+    rh = np.asarray(rh, dtype=float)
+    temp_c = np.asarray(temp_c, dtype=float)
+    emc = np.where(
+        rh <= 10,
+        0.03 + 0.2626 * rh - 0.00104 * rh * temp_c,
+        np.where(
+            rh <= 50,
+            2.22 - 0.160 * rh + 0.01660 * temp_c,
+            21.06 - 0.4944 * rh + 0.005565 * rh ** 2 - 0.00063 * rh * temp_c,
+        ),
+    )
+    return np.clip(emc, NELSON_EMC_MIN_PERCENT, NELSON_EMC_MAX_PERCENT)
+
+
+def _advance_dead_fuel_state(state: dict, emc: float, precip_mm: float) -> dict:
+    """One step of free-running (unanchored) 1/10/100-hr lag toward `emc`, with a rain bump - same shape as api/services/spread_rate_moisture.py::_advance_moisture, independently implemented, operating on scalars here rather than grids."""
+    fm1 = state["fm1"] + (emc - state["fm1"]) * (1.0 - math.exp(-1.0 / TAU_1_HR))
+    fm10 = state["fm10"] + (emc - state["fm10"]) * (1.0 - math.exp(-1.0 / TAU_10_HR))
+    fm100 = state["fm100"] + (emc - state["fm100"]) * (1.0 - math.exp(-1.0 / TAU_100_HR))
+    if precip_mm > 0.5:
+        fm1 = min(fm1 + 0.5 * precip_mm, NELSON_EMC_MAX_PERCENT)
+        fm10 = min(fm10 + 0.15 * precip_mm, NELSON_EMC_MAX_PERCENT)
+        fm100 = min(fm100 + 0.05 * precip_mm, NELSON_EMC_MAX_PERCENT)
+    return {"fm1": fm1, "fm10": fm10, "fm100": fm100}
+
+
+def derive_fm1_fm10_fm100(
+    temp_c: pd.Series, rh: pd.Series, precip_mm: pd.Series, observed_fm10_pct: pd.Series,
+) -> pd.DataFrame:
+    """
+    The real station history (`training-data/aligned/station_leads*.csv`)
+    only has a single fuel-moisture reading per station-hour (treated as
+    the observed 10-hr class) - no separate 1-hr/100-hr observations. This
+    derives them rather than observing them: a free-running Nelson-EMC
+    1/10/100-hr lag propagation (seeded from EMC, same shape as
+    api/services/spread_rate_moisture.py's live conditioning, independently
+    implemented), then shifts ALL THREE classes at every timestep by the
+    residual between this same propagation's own free-running 10-hr
+    estimate and the REAL observed 10-hr reading. This is the same
+    "anchor a modeled field to a real point observation via an additive
+    residual" idea as that module's RAWS 10-hr correction, applied here
+    temporally per-station (a real 10-hr reading exists at every historical
+    timestep, unlike the live product's spatially-sparse RAWS coverage).
+
+    This IS an approximation for the 1-hr/100-hr classes - flagged
+    explicitly, not presented as observed. The 10-hr class in the returned
+    frame is simply the real `observed_fm10_pct` passed through unchanged.
+
+    All four input Series must be the same length, in chronological order,
+    for a single station (fuel-moisture memory is sequential/stateful).
+    """
+    if not (len(temp_c) == len(rh) == len(precip_mm) == len(observed_fm10_pct)):
+        raise ValueError("temp_c, rh, precip_mm, and observed_fm10_pct must be the same length")
+
+    emc = nelson_emc(temp_c, rh)
+    fm1_free, fm10_free, fm100_free = [], [], []
+    state = None
+    for e, precip in zip(np.asarray(emc), precip_mm.to_numpy()):
+        if state is None:
+            state = {"fm1": float(e), "fm10": float(e), "fm100": float(e)}
+        else:
+            state = _advance_dead_fuel_state(state, float(e), float(precip))
+        fm1_free.append(state["fm1"])
+        fm10_free.append(state["fm10"])
+        fm100_free.append(state["fm100"])
+
+    index = temp_c.index
+    fm10_free_series = pd.Series(fm10_free, index=index)
+    correction = observed_fm10_pct.to_numpy() - fm10_free_series.to_numpy()
+    fm1 = np.clip(np.asarray(fm1_free) + correction, NELSON_EMC_MIN_PERCENT, NELSON_EMC_MAX_PERCENT)
+    fm100 = np.clip(np.asarray(fm100_free) + correction, NELSON_EMC_MIN_PERCENT, NELSON_EMC_MAX_PERCENT)
+    return pd.DataFrame({
+        "fm1_pct": pd.Series(fm1, index=index),
+        "fm10_pct": observed_fm10_pct,
+        "fm100_pct": pd.Series(fm100, index=index),
+    })
+
+
+def green_factor(gdd_accum: float) -> float:
+    """0 (fully cured) to 1 (fully green), ramping linearly over [GDD_GREENUP_START, GDD_GREENUP_FULL] - an approximation, not calibrated against real Missouri green-up observations."""
+    return float(np.clip((gdd_accum - GDD_GREENUP_START) / (GDD_GREENUP_FULL - GDD_GREENUP_START), 0.0, 1.0))
+
+
+def live_moisture_percent(gdd_accum: pd.Series) -> pd.DataFrame:
+    """
+    Maps accumulated growing-degree-days to Scott-Burgan L2 (cured) <-> L4
+    (green) live-fuel-moisture scenario values - same shape as
+    api/services/spread_rate_moisture.py::live_moisture_percent
+    (statewide-GDD-proxy mapped to standard scenario endpoints),
+    independently implemented here per this project's boundary.
+    """
+    green = gdd_accum.apply(green_factor)
+    herbaceous = LIVE_HERBACEOUS_CURED_PCT + green * (LIVE_HERBACEOUS_GREEN_PCT - LIVE_HERBACEOUS_CURED_PCT)
+    woody = LIVE_WOODY_CURED_PCT + green * (LIVE_WOODY_GREEN_PCT - LIVE_WOODY_CURED_PCT)
+    return pd.DataFrame({"live_herbaceous_pct": herbaceous, "live_woody_pct": woody})

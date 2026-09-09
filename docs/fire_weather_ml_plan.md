@@ -90,35 +90,110 @@ intentionally mirrors `risk_fusion`'s established, reviewed pattern.
 plausible Phase 2 input for calibrating KBDI's mean-annual-precipitation
 term - reusing it as data would not violate this boundary.
 
-## Known environment limitation (discovered, not yet resolved)
+## pyretechnics environment limitation - RESOLVED
 
-`pyretechnics==2025.5.15` cannot currently be installed in this Windows dev
-venv: it has no prebuilt wheel here and its Cython extension source targets
-NumPy's old C-API (`_PyArray_Descr.subarray`), which NumPy 2.x's C-API
-removed - a real ABI incompatibility discovered while setting up this model
-family, not a`pip` or dependency-resolution problem. `pip install
---no-deps --no-build-isolation -r requirements-pyretechnics.txt` gets past
-the numpy-version constraint and the missing-Cython error, but fails at the
-final compile step with `C2039: 'subarray' is not a member of
-'_PyArray_Descr'`. Production presumably installs a working prebuilt wheel
-on Linux; that assumption should be checked before relying on it. Until this
-is resolved (or run inside a Linux/WSL environment), `rothermel_labels.py`'s
-pyretechnics-dependent tests are skipped (`unittest.skipUnless`), not failed -
-see `tests/test_rothermel_labels.py`.
+`pyretechnics==2025.5.15`'s published sdist fails to *compile* against
+NumPy 2.x headers (`error: 'PyArray_Descr' has no member named 'subarray'`) -
+its generated Cython C source references a struct field NumPy 2.x's public
+header no longer exposes directly. Confirmed on both this Windows venv and
+a fresh WSL Ubuntu venv, so it's a real build-time incompatibility, not
+platform-specific.
+
+**Fix** (documented in `requirements-pyretechnics.txt`): build it against
+NumPy 1.26.4 headers, then restore NumPy 2.2.6 afterward. NumPy's C-ABI is
+backward compatible across this gap - confirmed by actually importing and
+running `pyretechnics` (including a full `calc_surface_fire_behavior_max`
+call) with NumPy 2.2.6 loaded, not just assumed from a version number.
+
+```
+pip install "numpy==1.26.4"
+pip install --no-deps --no-build-isolation -r requirements-pyretechnics.txt
+pip install "numpy==2.2.6"
+```
+
+With this, `tests/test_rothermel_labels.py`'s cross-check against
+`api/services/spread_rate.py`'s real `_compute_cell_ros` runs (not skipped)
+and passes - the concrete proof this module's physics matches production's,
+not an approximation of it. That cross-check also caught two real bugs
+during Phase 2 (both fixed, not worked around): `compute_row_label` was
+importing `pyretechnics` before its own numeric fuel-code range check
+(should short-circuit without importing anything for an out-of-range code),
+and the test itself was comparing percent-unit inputs against
+`_compute_cell_ros`'s fraction-unit contract (production's caller,
+`compute_spread_rate_grid`, converts before calling it - the test now
+converts too, for a fair comparison).
+
+## Phase 2 - real historical data build (done)
+
+Real files inspected and used, not assumed:
+
+- **Weather + observed 10-hr fuel moisture**: `paths.PRECIP_ALIGNED_DATASET`
+  (`training-data/aligned/station_leads_v4_precipitation-v1.csv`), filtered to
+  the static bundle's Missouri bbox `(-96.8, -88.1, 34.8, 41.8)`: 41 stations
+  in that rectangle, spanning 2025-07-14 to 2026-08-02 (~13 months).
+- **Static terrain**: `data/static/bundles/fire_behavior_static_2026.4.nc`
+  (real, already-built 256x256 LANDFIRE/3DEP grid) via a new
+  `static_lookup.py` (nearest-valid-cell cKDTree match, independently
+  implemented). All 41 in-bbox stations matched a valid cell - the bbox
+  rectangle, not terrain coverage, was the real constraint.
+- **Real county filter**: the bbox rectangle spans parts of AR/IA/KS/NE too.
+  A new `precip_normals.py` nearest-county spatial join (against
+  `risk_fusion/county_boundaries.geojson` + `risk_fusion/county_precip_normals.json`
+  - real MO-only data, reused as data, not imported as code) is what actually
+  restricts the panel to real Missouri stations: 23 of 41 stations fell
+  outside every MO county polygon despite being inside the bbox rectangle,
+  leaving **18 real Missouri stations**.
+- **Real wind direction**: the aligned CSV only has wind speed (direction was
+  lost in its per-lead-hour aggregation). A new `wind_direction.py` reads
+  real `u10`/`v10` from the historical RTMA cache
+  (`training-data/cache/rtma/rtma_*.nc`, ~9,500 hourly files) at each
+  station's nearest grid cell - 0 rows had to be dropped for a missing cache
+  hour; the RTMA archive fully covers this window.
+- **Derived fm1/fm100 and live-fuel moisture**: the source data only has one
+  fuel-moisture reading (treated as the observed 10-hr class) and no live-
+  fuel signal. `features.derive_fm1_fm10_fm100` (Nelson-EMC free-running
+  1/10/100-hr propagation, then all three shifted by the residual between
+  the free-running 10-hr estimate and the REAL observed 10-hr reading - the
+  same anchor-to-a-real-point-observation idea as
+  `api/services/spread_rate_moisture.py`'s RAWS correction, applied
+  temporally here since a real reading exists every hour) and
+  `features.live_moisture_percent` (GDD-driven Scott-Burgan L2/L4 mapping)
+  are explicitly flagged as approximations in their own docstrings - genuine
+  derivations, not observations, and not yet calibrated against real Missouri
+  green-up data.
+- **Real result** (`training-data/fire_weather_ml/station_panel.csv`,
+  produced by `historical_panel.py`): **18 stations, 68,244 station-hours,
+  64,320 with a real Rothermel-computed label (94.25% - the other 5.75% are
+  genuine non-burnable-fuel-model or degenerate-input cells, not a bug),
+  spanning the full ~13-month window.** That's roughly 215x `risk_fusion`'s
+  ~300 primary-tier fire-event count, sitting on disk already rather than
+  newly collected - the real "process more data" number this design promised.
+  Label values are physically plausible for Missouri's climate (`ros_ch_per_h`
+  up to ~14.2 chains/hour - "Moderate" on production's own 6-class scale, not
+  the extreme end that scale's western-wildfire-oriented upper classes target).
+
+New modules this phase: `static_lookup.py`, `precip_normals.py`,
+`wind_direction.py`, `historical_panel.py` (the orchestrator), plus
+`derive_fm1_fm10_fm100`/`live_moisture_percent`/`nelson_emc` added to
+`features.py`. 39 new tests (`test_static_lookup.py`, `test_precip_normals.py`,
+`test_wind_direction.py`, `test_fire_weather_derived_moisture.py`,
+`test_historical_panel.py`), including a full synthetic end-to-end
+integration test using the REAL `risk_fusion` county/precip-normal data
+(small, checked-in, no network needed).
 
 ## Phases
 
-1. **Scaffolding** (this document + the module map above) - done.
-2. **Historical data build** - run the label generator across available
-   historical RTMA + station fuel-moisture history to build a real
-   `station_panel.csv`; measure real coverage before fitting anything.
-3. **Fit + evaluate** - fit against the real panel, run the gates above,
-   explicitly compare emulation accuracy and inference cost against running
-   `pyretechnics` directly (the actual point of an ML emulator).
+1. **Scaffolding** - done.
+2. **Historical data build** - done (see above). Real coverage: 18 stations,
+   68,244 rows, 64,320 labeled, ~13 months.
+3. **Fit + evaluate** - fit against the real panel, run the gates in
+   `evaluate.py`, explicitly compare emulation accuracy and inference cost
+   against running `pyretechnics` directly (the actual point of an ML
+   emulator). Not yet done - next session's work.
 4. **Registration + shadow-serving** - only once Phase 3 passes: register a
    real beta, add a `fire_weather_ml` branch to
    `api/models/versioning.py::validate_promotion_candidate`, and build
    `api/services/fire_weather_ml_shadow.py` mirroring
    `risk_fusion_glm_shadow.py`'s pattern.
 
-Phases 2-4 are not implemented yet - this increment is scaffolding only.
+Phases 3-4 are not implemented yet.
