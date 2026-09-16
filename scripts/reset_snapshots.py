@@ -13,30 +13,38 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.database import get_db_path
 
-def reset_snapshots():
+def reset_snapshots(confirm=False):
+    """Reset all snapshots to unprocessed and delete weather_features.
+
+    `confirm=True` skips the interactive prompt - intended for callers (e.g.
+    the biweekly retrain orchestrator) that only reach this function because
+    the user already opted in via an explicit `--full-retrain` flag, so a
+    second confirmation would just block an unattended/scheduled run.
+    """
     db_path = get_db_path()
     print(f"Using database: {db_path}")
-    
+
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
-    
+
     # Get counts before reset
     cursor.execute("SELECT COUNT(*) FROM snapshots WHERE is_processed = 1")
     processed_count = cursor.fetchone()[0]
-    
+
     cursor.execute("SELECT COUNT(*) FROM weather_features")
     features_count = cursor.fetchone()[0]
-    
+
     print(f"\nCurrent state:")
     print(f"  - Processed snapshots: {processed_count}")
     print(f"  - Weather features records: {features_count}")
-    
-    # Ask for confirmation
-    response = input(f"\nReset all snapshots and delete {features_count} weather features? (yes/no): ")
-    if response.lower() != 'yes':
-        print("Cancelled.")
-        conn.close()
-        return
+
+    if not confirm:
+        # Ask for confirmation
+        response = input(f"\nReset all snapshots and delete {features_count} weather features? (yes/no): ")
+        if response.lower() != 'yes':
+            print("Cancelled.")
+            conn.close()
+            return
     
     # Delete all weather features (extracted HRRR data)
     cursor.execute("DELETE FROM weather_features")
