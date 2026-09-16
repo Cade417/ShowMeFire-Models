@@ -26,9 +26,16 @@ def _synthetic_panel(n_rows: int = 200, seed: int = 0, with_null_labels: bool = 
 class FitTests(unittest.TestCase):
     def test_fits_and_returns_expected_bundle_keys(self):
         bundle = model_bundle.fit(_synthetic_panel())
-        for key in ("model", "feature_columns", "label_column", "xgb_params", "training_row_count"):
+        for key in ("model", "feature_columns", "label_column", "xgb_params", "training_row_count", "feature_ranges"):
             self.assertIn(key, bundle)
         self.assertEqual(bundle["training_row_count"], 200)
+
+    def test_feature_ranges_match_the_real_training_data(self):
+        panel = _synthetic_panel()
+        bundle = model_bundle.fit(panel)
+        for column in model_bundle.MODEL_FEATURE_COLUMNS:
+            self.assertAlmostEqual(bundle["feature_ranges"][column]["min"], panel[column].min(), places=6)
+            self.assertAlmostEqual(bundle["feature_ranges"][column]["max"], panel[column].max(), places=6)
 
     def test_drops_null_label_rows_before_fitting(self):
         bundle = model_bundle.fit(_synthetic_panel(with_null_labels=True))

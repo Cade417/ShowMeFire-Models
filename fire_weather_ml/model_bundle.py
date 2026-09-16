@@ -83,6 +83,22 @@ def fit(
     model = xgb.XGBRegressor(**params)
     model.fit(usable[list(feature_columns)], usable[label_column])
 
+    # Real, discovered need for this: the model is trained on ~18 RAWS
+    # station sites (flat-sited, as weather stations typically are - none
+    # exceeded 0.54 degrees of slope in this training panel), but scoring
+    # it against a full terrain grid (e.g. for a map) hits real Missouri
+    # hillside cells far outside that range. Tree-based models don't
+    # refuse to extrapolate - they silently produce whatever the nearest
+    # training leaf implies, which is NOT a validated prediction. Recording
+    # each feature's real observed [min, max] here lets a scoring caller
+    # (see api/services/fire_weather_ml_shadow.py) refuse to report a score
+    # for a cell outside it, rather than serving a confident-looking but
+    # untested extrapolation.
+    feature_ranges = {
+        column: {"min": float(usable[column].min()), "max": float(usable[column].max())}
+        for column in feature_columns
+    }
+
     return {
         "model": model,
         "feature_columns": list(feature_columns),
@@ -90,6 +106,7 @@ def fit(
         "xgb_params": params,
         "training_row_count": int(len(usable)),
         "dropped_null_label_rows": int(len(train_panel) - len(usable)),
+        "feature_ranges": feature_ranges,
     }
 
 
@@ -154,6 +171,7 @@ def save(bundle: Dict, directory: Path) -> None:
         "xgb_params": bundle["xgb_params"],
         "training_row_count": bundle["training_row_count"],
         "dropped_null_label_rows": bundle["dropped_null_label_rows"],
+        "feature_ranges": bundle["feature_ranges"],
     }
     (directory / METADATA_ASSET_FILENAME).write_text(json.dumps(metadata, indent=2), encoding="utf-8")
     (directory / RISK_CALIBRATION_ASSET_FILENAME).write_text(
