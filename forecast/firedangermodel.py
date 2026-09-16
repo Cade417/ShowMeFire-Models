@@ -2,6 +2,7 @@
 firedangermodel.py
 
 Fire Danger Prediction Model - Aligned with Missouri AOP Guidance
+- QUARANTINED: unsupported advisory experiment; never authoritative or production.
 - Uses NWS Elevated Fire Weather Matrix criteria
 - Predicts fire danger based on fuel moisture, RH, and wind thresholds
 - Trains ML model to predict criteria-based danger scores
@@ -54,7 +55,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-# ==================== MAP GENERATION UTILITIES ====================
+# ==================== QUARANTINED MAP UTILITIES ====================
 
 def create_base_map(extent, map_crs, data_crs, pixelw, pixelh, mapdpi):
     """Create base map with Missouri boundaries."""
@@ -1079,6 +1080,7 @@ if __name__ == "__main__":
     import argparse
     
     parser = argparse.ArgumentParser(description='Fire Danger ML Model Training and Mapping (Missouri AOP Aligned)')
+    parser.add_argument('--allow-experimental', action='store_true', help='Acknowledge this unsupported advisory workflow')
     parser.add_argument('--train', action='store_true', help='Train fire danger model')
     parser.add_argument('--generate-map', action='store_true', help='Generate fire danger map from model')
     parser.add_argument('--forecast-data', type=str, help='Path to forecast data JSON file')
@@ -1089,6 +1091,8 @@ if __name__ == "__main__":
     parser.add_argument('--with-hrrr', action='store_true', help='Include HRRR data in training (requires significant RAM)')
 
     args = parser.parse_args()
+    if not args.allow_experimental:
+        parser.error("This direct-danger workflow is quarantined; pass --allow-experimental to run it explicitly")
 
     if args.train:
         train_and_save_fire_danger_model(

@@ -55,7 +55,16 @@ def _save_config(config):
     temp = CONFIG_PATH.with_suffix(CONFIG_PATH.suffix + ".tmp")
     with open(temp, "w") as f:
         json.dump(config, f, indent=2)
-    temp.replace(CONFIG_PATH)
+    try:
+        temp.replace(CONFIG_PATH)
+    except PermissionError:
+        # Some Windows/network volumes permit writes but deny replace while a
+        # reader has the registry open. Keep the already-complete temp file as
+        # the source and flush the destination before removing it.
+        with open(temp, "r", encoding="utf-8") as source, open(CONFIG_PATH, "w", encoding="utf-8") as destination:
+            destination.write(source.read())
+            destination.flush()
+        temp.unlink()
 
 
 def _entry(model_type, config):

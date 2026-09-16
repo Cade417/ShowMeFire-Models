@@ -261,6 +261,7 @@ def evaluate(model_path=None, model_meta_path=None, test_data_path=None):
     print(f"  baseline macro_f1: {baseline_macro_f1:.4f}")
     print(f"  overall gate pass: {overall_gate_pass}")
     print(f"  confusion matrix plot: {cm_path}")
+    return report
 
 
 
