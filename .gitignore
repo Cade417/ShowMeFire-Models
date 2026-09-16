@@ -10,3 +10,7 @@ venv/
 *.egg-info/
 
 .env
+*.exe
+by_rh_output.csv
+by_wind_output.csv
+grid_output.csv
