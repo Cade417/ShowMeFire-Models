@@ -1,0 +1,702 @@
+{
+  "schema": "county-precip-normals-v1",
+  "source": "NOAA NCEI Climate at a Glance County Time Series (nClimGrid), pcp/12/12",
+  "source_url_pattern": "https://www.ncei.noaa.gov/access/monitoring/climate-at-a-glance/county/time-series/{state}-{county_fips3}/pcp/12/12/data.json?raw=1",
+  "normal_period": "1991-2020",
+  "retrieved_at": "2026-08-16T15:57:36Z",
+  "county_count": 115,
+  "failure_count": 0,
+  "failures": [],
+  "counties": {
+    "29045": {
+      "name": "Clark",
+      "mean_annual_precip_mm": 994.55,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29005": {
+      "name": "Atchison",
+      "mean_annual_precip_mm": 874.46,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29199": {
+      "name": "Scotland",
+      "mean_annual_precip_mm": 1007.9,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29197": {
+      "name": "Schuyler",
+      "mean_annual_precip_mm": 1011.1,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29147": {
+      "name": "Nodaway",
+      "mean_annual_precip_mm": 935.57,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29171": {
+      "name": "Putnam",
+      "mean_annual_precip_mm": 994.66,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29227": {
+      "name": "Worth",
+      "mean_annual_precip_mm": 955.98,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29129": {
+      "name": "Mercer",
+      "mean_annual_precip_mm": 983.28,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29081": {
+      "name": "Harrison",
+      "mean_annual_precip_mm": 979.81,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29075": {
+      "name": "Gentry",
+      "mean_annual_precip_mm": 968.47,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29211": {
+      "name": "Sullivan",
+      "mean_annual_precip_mm": 997.2,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29001": {
+      "name": "Adair",
+      "mean_annual_precip_mm": 1032.98,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29103": {
+      "name": "Knox",
+      "mean_annual_precip_mm": 1024.26,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29087": {
+      "name": "Holt",
+      "mean_annual_precip_mm": 903.31,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29079": {
+      "name": "Grundy",
+      "mean_annual_precip_mm": 1002.83,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29111": {
+      "name": "Lewis",
+      "mean_annual_precip_mm": 1003.68,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29003": {
+      "name": "Andrew",
+      "mean_annual_precip_mm": 947.19,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29061": {
+      "name": "Daviess",
+      "mean_annual_precip_mm": 996.62,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29063": {
+      "name": "Dekalb",
+      "mean_annual_precip_mm": 990.98,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29121": {
+      "name": "Macon",
+      "mean_annual_precip_mm": 1047.24,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29115": {
+      "name": "Linn",
+      "mean_annual_precip_mm": 1019.0,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29117": {
+      "name": "Livingston",
+      "mean_annual_precip_mm": 1021.14,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29205": {
+      "name": "Shelby",
+      "mean_annual_precip_mm": 1048.02,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29021": {
+      "name": "Buchanan",
+      "mean_annual_precip_mm": 953.59,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29025": {
+      "name": "Caldwell",
+      "mean_annual_precip_mm": 1008.08,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29049": {
+      "name": "Clinton",
+      "mean_annual_precip_mm": 989.66,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29041": {
+      "name": "Chariton",
+      "mean_annual_precip_mm": 1025.46,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29173": {
+      "name": "Ralls",
+      "mean_annual_precip_mm": 1008.86,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29033": {
+      "name": "Carroll",
+      "mean_annual_precip_mm": 1022.91,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29163": {
+      "name": "Pike",
+      "mean_annual_precip_mm": 1015.28,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29175": {
+      "name": "Randolph",
+      "mean_annual_precip_mm": 1050.05,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29177": {
+      "name": "Ray",
+      "mean_annual_precip_mm": 1019.9,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29165": {
+      "name": "Platte",
+      "mean_annual_precip_mm": 979.18,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29047": {
+      "name": "Clay",
+      "mean_annual_precip_mm": 1001.66,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29007": {
+      "name": "Audrain",
+      "mean_annual_precip_mm": 1052.29,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29195": {
+      "name": "Saline",
+      "mean_annual_precip_mm": 1042.38,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29089": {
+      "name": "Howard",
+      "mean_annual_precip_mm": 1049.03,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29019": {
+      "name": "Boone",
+      "mean_annual_precip_mm": 1069.18,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29113": {
+      "name": "Lincoln",
+      "mean_annual_precip_mm": 1043.02,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29107": {
+      "name": "Lafayette",
+      "mean_annual_precip_mm": 1037.79,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29095": {
+      "name": "Jackson",
+      "mean_annual_precip_mm": 1040.33,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29139": {
+      "name": "Montgomery",
+      "mean_annual_precip_mm": 1061.79,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29027": {
+      "name": "Callaway",
+      "mean_annual_precip_mm": 1078.2,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29219": {
+      "name": "Warren",
+      "mean_annual_precip_mm": 1084.87,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29053": {
+      "name": "Cooper",
+      "mean_annual_precip_mm": 1045.34,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29183": {
+      "name": "St Charles",
+      "mean_annual_precip_mm": 1074.13,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29101": {
+      "name": "Johnson",
+      "mean_annual_precip_mm": 1052.6,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29159": {
+      "name": "Pettis",
+      "mean_annual_precip_mm": 1051.73,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29189": {
+      "name": "St Louis",
+      "mean_annual_precip_mm": 1074.94,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29037": {
+      "name": "Cass",
+      "mean_annual_precip_mm": 1063.27,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29135": {
+      "name": "Moniteau",
+      "mean_annual_precip_mm": 1078.89,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29510": {
+      "name": "St Louis City",
+      "mean_annual_precip_mm": 1061.56,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29151": {
+      "name": "Osage",
+      "mean_annual_precip_mm": 1098.61,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29073": {
+      "name": "Gasconade",
+      "mean_annual_precip_mm": 1102.17,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29141": {
+      "name": "Morgan",
+      "mean_annual_precip_mm": 1088.14,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29051": {
+      "name": "Cole",
+      "mean_annual_precip_mm": 1085.22,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29071": {
+      "name": "Franklin",
+      "mean_annual_precip_mm": 1095.26,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29083": {
+      "name": "Henry",
+      "mean_annual_precip_mm": 1078.02,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29015": {
+      "name": "Benton",
+      "mean_annual_precip_mm": 1091.12,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29099": {
+      "name": "Jefferson",
+      "mean_annual_precip_mm": 1113.58,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29013": {
+      "name": "Bates",
+      "mean_annual_precip_mm": 1096.1,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29131": {
+      "name": "Miller",
+      "mean_annual_precip_mm": 1080.75,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29125": {
+      "name": "Maries",
+      "mean_annual_precip_mm": 1105.49,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29221": {
+      "name": "Washington",
+      "mean_annual_precip_mm": 1157.19,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29055": {
+      "name": "Crawford",
+      "mean_annual_precip_mm": 1136.67,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29029": {
+      "name": "Camden",
+      "mean_annual_precip_mm": 1090.08,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29185": {
+      "name": "St Clair",
+      "mean_annual_precip_mm": 1112.42,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29161": {
+      "name": "Phelps",
+      "mean_annual_precip_mm": 1123.16,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29186": {
+      "name": "Ste Genevieve",
+      "mean_annual_precip_mm": 1127.58,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29085": {
+      "name": "Hickory",
+      "mean_annual_precip_mm": 1113.62,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29217": {
+      "name": "Vernon",
+      "mean_annual_precip_mm": 1123.49,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29187": {
+      "name": "St Francois",
+      "mean_annual_precip_mm": 1160.75,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29169": {
+      "name": "Pulaski",
+      "mean_annual_precip_mm": 1116.29,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29157": {
+      "name": "Perry",
+      "mean_annual_precip_mm": 1169.0,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29039": {
+      "name": "Cedar",
+      "mean_annual_precip_mm": 1141.17,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29059": {
+      "name": "Dallas",
+      "mean_annual_precip_mm": 1126.5,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29105": {
+      "name": "Laclede",
+      "mean_annual_precip_mm": 1131.52,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29167": {
+      "name": "Polk",
+      "mean_annual_precip_mm": 1127.59,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29065": {
+      "name": "Dent",
+      "mean_annual_precip_mm": 1168.63,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29093": {
+      "name": "Iron",
+      "mean_annual_precip_mm": 1206.71,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29123": {
+      "name": "Madison",
+      "mean_annual_precip_mm": 1211.06,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29011": {
+      "name": "Barton",
+      "mean_annual_precip_mm": 1139.46,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29017": {
+      "name": "Bollinger",
+      "mean_annual_precip_mm": 1244.04,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29031": {
+      "name": "Cape Girardeau",
+      "mean_annual_precip_mm": 1222.39,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29179": {
+      "name": "Reynolds",
+      "mean_annual_precip_mm": 1227.09,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29215": {
+      "name": "Texas",
+      "mean_annual_precip_mm": 1165.92,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29057": {
+      "name": "Dade",
+      "mean_annual_precip_mm": 1139.05,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29229": {
+      "name": "Wright",
+      "mean_annual_precip_mm": 1160.43,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29225": {
+      "name": "Webster",
+      "mean_annual_precip_mm": 1169.91,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29203": {
+      "name": "Shannon",
+      "mean_annual_precip_mm": 1211.88,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29077": {
+      "name": "Greene",
+      "mean_annual_precip_mm": 1142.71,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29097": {
+      "name": "Jasper",
+      "mean_annual_precip_mm": 1155.63,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29223": {
+      "name": "Wayne",
+      "mean_annual_precip_mm": 1248.96,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29201": {
+      "name": "Scott",
+      "mean_annual_precip_mm": 1242.11,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29109": {
+      "name": "Lawrence",
+      "mean_annual_precip_mm": 1168.71,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29207": {
+      "name": "Stoddard",
+      "mean_annual_precip_mm": 1251.09,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29133": {
+      "name": "Mississippi",
+      "mean_annual_precip_mm": 1271.9,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29035": {
+      "name": "Carter",
+      "mean_annual_precip_mm": 1246.66,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29043": {
+      "name": "Christian",
+      "mean_annual_precip_mm": 1170.86,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29067": {
+      "name": "Douglas",
+      "mean_annual_precip_mm": 1186.29,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29145": {
+      "name": "Newton",
+      "mean_annual_precip_mm": 1178.44,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29091": {
+      "name": "Howell",
+      "mean_annual_precip_mm": 1207.86,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29209": {
+      "name": "Stone",
+      "mean_annual_precip_mm": 1163.0,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29023": {
+      "name": "Butler",
+      "mean_annual_precip_mm": 1266.31,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29009": {
+      "name": "Barry",
+      "mean_annual_precip_mm": 1185.98,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29143": {
+      "name": "New Madrid",
+      "mean_annual_precip_mm": 1265.02,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29149": {
+      "name": "Oregon",
+      "mean_annual_precip_mm": 1236.13,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29181": {
+      "name": "Ripley",
+      "mean_annual_precip_mm": 1272.22,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29213": {
+      "name": "Taney",
+      "mean_annual_precip_mm": 1171.33,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29153": {
+      "name": "Ozark",
+      "mean_annual_precip_mm": 1192.3,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29119": {
+      "name": "McDonald",
+      "mean_annual_precip_mm": 1185.48,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29069": {
+      "name": "Dunklin",
+      "mean_annual_precip_mm": 1274.39,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29155": {
+      "name": "Pemiscot",
+      "mean_annual_precip_mm": 1274.63,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29127": {
+      "name": "Marion",
+      "mean_annual_precip_mm": 1008.98,
+      "years_used": 30,
+      "period": "1991-2020"
+    },
+    "29137": {
+      "name": "Monroe",
+      "mean_annual_precip_mm": 1037.68,
+      "years_used": 30,
+      "period": "1991-2020"
+    }
+  }
+}
