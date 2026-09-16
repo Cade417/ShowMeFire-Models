@@ -124,6 +124,43 @@ preceding complete UTC analysis hour, and retains seven days by default. New
 RTMA files are not placed in permanent daily ZIPs. Set
 `RTMA_RETENTION_DAYS` to an integer greater than zero to change the live cache.
 
+### 2a. Local Synoptic backfill (no server access required)
+
+`scripts/backfill_synoptic.py` also exists in this repo and can fetch
+directly into `archive/raw_data/` on the training machine - useful for
+extending history further back than what's already been archived on the
+server, without needing SSH access at all. Unlike the production script,
+it defaults to the full 9-state region (`MO, OK, AR, TN, KY, IL, IA, NE, KS`)
+on Synoptic network `2`, which in practice returns far more fuel-moisture
+stations than Missouri alone (~19 MO-only vs. ~90-116 across the region) -
+`load_observations()` has no state filter, so the wider set flows straight
+into the aligned dataset.
+
+```bash
+# Add SYNOPTIC_API_TOKEN=... to .env first (gitignored, never committed).
+
+# Inspect a full year back from today. Writes and fetches nothing.
+python scripts/backfill_synoptic.py --dry-run
+
+# Fetch the full year, 7-day chunks, 4 concurrent requests.
+python scripts/backfill_synoptic.py
+
+# Narrower range, or re-fetch days that already exist under an older/
+# narrower query (e.g. upgrading old MO-only days to the 9-state set):
+python scripts/backfill_synoptic.py --start 2026-04-01 --end 2026-07-11 --force
+```
+
+This is pure HTTP/JSON (no native-library concurrency hazards), so
+`--workers` here is thread-based, unlike the process-based HRRR/RTMA
+backfills below. One file is written per UTC day
+(`raw_data_YYYYMMDD.json`), matching what `pull_archives.sh` already
+produces from server ZIPs - both feed the same `load_observations()` path.
+The resumable manifest is `archive/raw_data/backfill_manifest.json`. A day
+with zero surviving stations (e.g. everything ignore-filtered) still gets
+written and marked complete - it's a legitimate outcome, not a gap to
+retry forever. `ignored_stations` (SQLite) is applied the same as
+production.
+
 ## 3. Synchronize archives to the training machine
 
 From Linux, macOS, or WSL:
@@ -146,7 +183,33 @@ Do not synchronize while a manual server backfill/merge is still running.
 Old production ZIPs that already contain RTMA remain valid and are not
 compacted. New ZIPs intentionally contain no RTMA.
 
-## 4. Backfill RTMA on the training machine
+## 4. Backfill HRRR and RTMA on the training machine
+
+### 4a. Backfill HRRR
+
+`scripts/backfill_hrrr.py` fetches historical HRRR runs directly via Herbie
+(NOAA/AWS archive), cropped to the same Missouri-buffered bounding box RTMA
+already uses - nothing downstream needs the full CONUS grid, and cropping
+takes a run from ~466MB to a few MB. Confirmed against real data up to a
+year back.
+
+```bash
+# Inspect a full year back from today.
+python scripts/backfill_hrrr.py --dry-run
+
+# Fetch the full year. Defaults match existing cached files: 12z, f04-f15.
+python scripts/backfill_hrrr.py
+
+# Narrower range, or a smoke test before committing to the full year:
+python scripts/backfill_hrrr.py --start 2025-08-01 --end 2025-08-07 --limit 2
+```
+
+Like RTMA below, this uses process-pool concurrency, not threads: the
+netCDF write and GRIB decode inside `fetch_hrrr` aren't thread-safe (an
+earlier attempt with threads on the RTMA backfill segfaulted). The
+resumable manifest is `cache/hrrr/backfill_manifest.json`.
+
+### 4b. Backfill RTMA
 
 Historical RTMA storage belongs under `SMF_DATA_ROOT`. For each local HRRR run,
 the default teacher window downloads initialization minus 12 hours through the
@@ -183,9 +246,18 @@ the selected missing/forced work and is intended for smoke testing.
 python spatial/build_aligned_dataset.py --max-initial-age-hours 3
 python spatial/coverage_report.py
 python spatial/evaluate_baselines.py
-python spatial/train_station_sequence.py
+python spatial/tune_station_sequence.py
+python spatial/evaluate_station_candidate.py --checkpoint <selected-checkpoint>
 python spatial/check_spatial_gate.py
+python spatial/register_station_candidate.py --checkpoint <selected-checkpoint>
 ```
+
+Station tuning screens the fixed 12-configuration search space on three
+expanding chronological folds, then repeats the top three configurations
+across three seeds. Search and ordinary training do not access the locked
+holdout and do not register artifacts. The selected development checkpoint is
+evaluated once; only a passing, checksum-matched final report can be registered
+as beta. Registration never changes the API server's stable model.
 
 After the spatial gate succeeds, build teacher/student tensors, train an
 identical non-distilled control and distilled candidate, and create the
@@ -508,3 +580,128 @@ hour, station count, HRRR step count, and the active asset checksums.
 
 Keep the PyTorch checkpoint as an unregistered experiment. Do not publish or
 promote it. Investigate unsupported operations or numerical differences first.
+# Hybrid station V3 workflow
+
+V3 is an experimental residual bundle: an XGBoost causal trajectory plus an
+ordered-quantile GRU correction. It uses `station-split-v2` (80% development,
+10% calibration, 10% locked historical relock). None of these commands changes
+the current stable model or the existing `0.0.1-beta.5` station candidate.
+
+Run each stage explicitly from the repository virtual environment:
+
+```powershell
+python spatial/search_hybrid_station.py 2>&1 |
+  Tee-Object -FilePath $env:SMF_DATA_ROOT\reports\hybrid-v3-search.log
+python spatial/fit_hybrid_station.py
+python spatial/calibrate_hybrid_station.py
+python spatial/evaluate_hybrid_station.py
+python spatial/check_hybrid_gate.py
+```
+
+The search writes atomic state after every trial and safely resumes from
+`hybrid_v3_search.state.json`. The final evaluation refuses to overwrite an
+existing report. Only a fully passing bundle can be registered:
+
+```powershell
+python spatial/register_hybrid_station.py
+```
+
+Registration uses the separate `fuel_moisture_station_hybrid` beta model type.
+Stable promotion is intentionally outside this repository and still requires a
+30-day prospective shadow period.
+
+# Guarded station V4 workflow
+
+V4 permanently excludes the exposed V3 historical relock. It uses observed
+station FM/RH/wind for category verification, an enhanced XGBoost base, a
+bounded/gated seven-quantile GRU correction, and an out-of-fold per-lead guard.
+V4 is experimental shadow-only until 30 new prospective days and an elevated
+risk period pass every fuel-moisture, category, and probability gate.
+
+```powershell
+python scripts/backfill_hrrr.py --start 2025-07-14 --end 2026-08-01 --precip-context --existing-runs-only --workers 6
+python spatial/build_aligned_dataset.py --max-initial-age-hours 3
+python spatial/coverage_report.py --dataset "$env:SMF_DATA_ROOT\aligned\station_leads_precipitation-v1.csv"
+python spatial/validate_precip_rebuild.py
+python spatial/enrich_v4_dataset.py
+python spatial/prepare_v4.py
+python spatial/search_v4_base.py
+python spatial/search_v4_residual.py
+python spatial/fit_v4.py
+python spatial/calibrate_v4.py
+python spatial/evaluate_v4_development.py
+python spatial/shadow_export_v4.py
+```
+
+If the complete HRRR rebuild is interrupted after the previous aligned CSV was
+already valid, create the V4 label dataset without repeating the grid work:
+
+```powershell
+python spatial/enrich_v4_dataset.py
+```
+
+This joins observed RH and wind back to the exact station/target timestamp,
+validates fuel-moisture provenance and the 30-minute tolerance, and writes
+`station_leads_v4_precipitation-v1.csv` atomically. It never modifies
+`station_leads.csv` or the earlier V4 dataset.
+V4 commands use this separate dataset by default.
+
+The precipitation backfill stores compact F00-F03 precipitation-only sidecars;
+it does not duplicate the large F04-F15 temperature/RH/wind files. The aligned
+builder writes versioned per-run fragments and resumes them when source mtimes
+and the precipitation-contract checksum still match. If a sidecar arrives
+after a fragment was built, that fragment is automatically invalidated.
+
+V4 selection includes an August development fold plus later winter and spring
+folds. It prefers summer MAE only among candidates within 1% of the best global
+MAE, and residual training gives summer rows a modest 1.25 weight. Evaluation
+writes the complete JSON report to the reports directory and prints only a
+compact gate summary to the terminal.
+
+`prepare_v4.py` must report `precipitation_available: true`. A constant-zero or
+unitless archive now fails before a dataset is written. F04-F15 cumulative
+values remain available as `hrrr_precip_mm` for compatibility, while V4 uses
+the explicit interval and interval-duration fields.
+
+Configure the API-only experimental loader with `SMF_V4_SHADOW_BUNDLE`. This
+does not create a registry entry and cannot affect authoritative P50 output.
+Prospective predictions and observations are written as separate immutable
+files. Once sufficient new evidence exists:
+
+```powershell
+python spatial/evaluate_v4_prospective.py
+python spatial/register_v4.py
+```
+
+`register_v4.py` refuses calibration or historical reports. The direct-danger
+`forecast/firedangermodel.py` workflow is quarantined and requires the explicit
+`--allow-experimental` acknowledgement.
+# Summer-guarded V5 experiment
+
+V5 is an experimental, non-registering path. It keeps the incumbent XGBoost
+prediction as its exact fallback and applies a bounded shallow-XGBoost residual
+only in regime/lead cells that improve development out-of-fold MAE without an
+unsafe fold RMSE or critical-fuel-moisture regression.
+
+```powershell
+$env:SMF_DATA_ROOT='M:\_Development\ShowMeFire\training-data'
+$env:SMF_XGB_DEVICE='cuda'
+python spatial/prepare_v5.py
+python spatial/search_v5.py
+python spatial/fit_v5.py
+python spatial/shadow_export_v5.py
+```
+
+The expensive causal feature frame is cached as
+`reports/v5_static_features.pkl` and is accepted only when its evidence
+manifest checksum, physics variant, row count, and index contract match.
+
+Set `SMF_V5_SHADOW_BUNDLE` in the API only to the directory produced by
+`shadow_export_v5.py`. Shadow records are immutable: the prediction file must
+exist before a separate observation file can be attached. Repeated V5 errors
+disable V5 shadow collection only.
+
+`evaluate_v5.py` reads prospective runs strictly after 2026-08-01 and refuses
+to overwrite its report. `register_v5.py` refuses registration unless that
+prospective report passes every gate and explicitly allows beta registration.
+Neither command changes the stable registry pointer.
