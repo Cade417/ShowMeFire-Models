@@ -30,7 +30,7 @@ def add_physics(frame):
 
 
 def _evaluate_split(train, test):
-    train, test = train.dropna(subset=FEATURES + ["target_fm"]), test.dropna(subset=FEATURES + ["target_fm"])
+    train, test = train.dropna(subset=FEATURES + ["target_fm", "physics_fm"]), test.dropna(subset=FEATURES + ["target_fm", "physics_fm"])
     model = xgb.XGBRegressor(n_estimators=300, learning_rate=.05, max_depth=5, objective="reg:squarederror", random_state=417)
     model.fit(train[FEATURES], train.target_fm)
     predictions = {"persistence": test.initial_fm.values, "physics": test.physics_fm.values, "incumbent_control": model.predict(test[FEATURES])}

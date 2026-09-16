@@ -1,3 +1,4 @@
+"""Report the locked station gate; never infer success from stale aggregate files."""
 import json
 import sys
 from pathlib import Path
@@ -5,12 +6,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import paths
 
-coverage = json.loads((paths.REPORTS_DIR / "coverage.json").read_text())
-sequence = json.loads((paths.REPORTS_DIR / "sequence_metrics.json").read_text())
-baseline = json.loads((paths.REPORTS_DIR / "baseline_metrics.json").read_text())
-incumbent_mae = baseline["temporal"]["incumbent_control"]["mae"]
-passes = coverage["spatial_model_data_gate"]["pass"] and sequence["mae"] <= .95 * min(sequence["persistence_mae"], incumbent_mae)
-result = {"pass": passes, "coverage_gate": coverage["spatial_model_data_gate"], "sequence_mae": sequence["mae"],
-          "required_max_mae": .95 * min(sequence["persistence_mae"], incumbent_mae)}
+evaluation = paths.REPORTS_DIR / "final_station_evaluation.json"
+if not evaluation.exists():
+    print(json.dumps({"pass": False, "reason": "final_station_evaluation.json is unavailable"}, indent=2))
+    raise SystemExit(2)
+report = json.loads(evaluation.read_text())
+result = {"pass": bool(report.get("pass")), "checks": report.get("checks", {}),
+          "checkpoint_sha256": report.get("checkpoint_sha256"),
+          "dataset_sha256": report.get("dataset_sha256"),
+          "prospective_shadow_required": report.get("prospective_shadow_required", True)}
 print(json.dumps(result, indent=2))
-raise SystemExit(0 if passes else 2)
+raise SystemExit(0 if result["pass"] and all(result["checks"].values()) else 2)

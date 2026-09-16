@@ -28,3 +28,21 @@ def evolve_fm(initial_fm, temp_c, rh, drying_tau_hours=10.0, wetting_tau_hours=6
         state = state + (equilibrium - state) * (1.0 - np.exp(-1.0 / tau))
         output[index] = state
     return output
+
+
+def evolve_fm_with_rain(initial_fm, temp_c, rh, precip_increment_mm,
+                        rain_saturation=30.0, rain_scale_mm=2.0,
+                        drying_tau_hours=10.0, wetting_tau_hours=6.0):
+    """Causally apply soft rain wetting before each hourly EMC transition."""
+    temp_c, rh, rain = map(lambda value: np.asarray(value, dtype=float),
+                           (temp_c, rh, precip_increment_mm))
+    output = np.empty_like(temp_c); state = np.asarray(initial_fm, dtype=float)
+    for index in range(len(output)):
+        amount = max(0.0, float(rain[index])) if np.isfinite(rain[index]) else 0.0
+        wetting = 1.0 - np.exp(-amount / rain_scale_mm)
+        state = state + (rain_saturation - state) * wetting
+        equilibrium = nelson_emc(temp_c[index], rh[index])
+        tau = np.where(equilibrium < state, drying_tau_hours, wetting_tau_hours)
+        state = state + (equilibrium - state) * (1.0 - np.exp(-1.0 / tau))
+        output[index] = state
+    return output
