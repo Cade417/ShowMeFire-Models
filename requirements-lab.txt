@@ -1,0 +1,9 @@
+# Model Lab extras (Streamlit UI). Install into the model-training venv.
+streamlit>=1.37
+plotly>=5.22
+apscheduler>=3.10
+aiohttp>=3.13
+pytz>=2024.1
+boto3>=1.34
+botocore>=1.34
+psutil>=7.2

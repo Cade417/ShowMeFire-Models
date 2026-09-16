@@ -9,6 +9,22 @@ and troubleshooting—use the
 
 No bulk training data is ever pushed to this repo - see `paths.py`.
 
+**Just need to sync data and retrain the fuel-moisture model?** See the [Model Training Quickstart](docs/model_training_quickstart.md) — the short version of everything below.
+
+## Model Lab (local compare UI)
+
+Streamlit lab for scoring production vs beta forecast archives against observations, browsing the local registry/shadow candidates, and reading offline evaluation reports:
+
+```powershell
+cd M:\_Development\ShowMeFire\model-training
+.venv\Scripts\Activate.ps1
+$env:SMF_DATA_ROOT = "M:\_Development\ShowMeFire\training-data"
+python -m pip install -r requirements-lab.txt
+streamlit run model_lab/app.py
+```
+
+Details: [`model_lab/README.md`](model_lab/README.md).
+
 ## Setup
 
 ```bash
