@@ -53,6 +53,10 @@ def publish(model_type, version=None, repo=None):
             "version": beta["version"],
             "performance": beta.get("performance", {}),
             "trained_at": beta.get("trained_at"),
+            # Preserve the complete training contract for the API-side
+            # promotion gates. Without this, imported candidates appear to
+            # have good scores but are missing all required metadata.
+            "model_metadata": beta.get("metadata", {}),
             "assets": published_assets,
         }, indent=2))
 
