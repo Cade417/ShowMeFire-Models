@@ -5,6 +5,7 @@ from sklearn.model_selection import TimeSeriesSplit, ParameterGrid
 import matplotlib.pyplot as plt
 import os
 import sys
+import json
 from datetime import datetime
 from pathlib import Path
 
@@ -121,6 +122,41 @@ def train_fuel_moisture_model(channel="beta", bump="patch", search=True):
         "training_samples": len(X_train),
         "test_samples": len(X_test)
     }
+
+    # Keep the model contract with the artifact. The API promotion gate needs
+    # this information to distinguish a genuinely evaluated candidate from a
+    # bare model file. This is metadata-only; it does not alter the trained
+    # model or its predictions.
+    training_meta_path = paths.DATA_ROOT / "training_set_mo_meta.json"
+    match_meta = json.loads(training_meta_path.read_text()) if training_meta_path.exists() else {}
+    metadata = {
+        "feature_schema_version": "2.0.0",
+        "feature_columns": features_to_use,
+        "feature_ranges": {
+            name: {"min": float(X_train[name].min()), "max": float(X_train[name].max())}
+            for name in features_to_use
+        },
+        "rule_spec_version": "1.0.0",
+        "training_window": {
+            "start": df["obs_time"].min().isoformat(),
+            "end": df["obs_time"].max().isoformat(),
+            "holdout_start": df["obs_time"].iloc[split_idx].isoformat(),
+            "holdout_end": df["obs_time"].max().isoformat(),
+        },
+        "data_match_policy": match_meta.get("data_match_policy", {}),
+        "validation_folds": [],
+        "class_support": {},
+        "imputation_policy": {"hours_since_rain_without_history": 24.0},
+        "max_feature_age_minutes": 60,
+        "promotion_gates": {},
+        "shadow_required": True,
+        "ground_truth_shadow_required": True,
+    }
+    if available_precip_features:
+        metadata.update({
+            "precipitation_contract_version": PRECIPITATION_CONTRACT_VERSION,
+            "precipitation_contract_sha256": PRECIPITATION_CONTRACT_SHA256,
+        })
 
     # Compare against whatever is currently `stable` BEFORE registering this
     # run's beta candidate - registration only ever writes to `beta`/`stable`

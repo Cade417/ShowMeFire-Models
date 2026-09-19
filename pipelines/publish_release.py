@@ -60,14 +60,24 @@ def publish(model_type, version=None, repo=None):
             "assets": published_assets,
         }, indent=2))
 
-        cmd = [
-            "gh", "release", "create", tag,
-            *asset_paths, str(meta_path),
-            "--repo", repo,
-            "--prerelease",
-            "--title", f"{model_type} {beta['version']}",
-            "--notes", f"Beta candidate for {model_type}. Performance: {json.dumps(beta.get('performance', {}))}",
-        ]
+        exists = subprocess.run(
+            ["gh", "release", "view", tag, "--repo", repo],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        ).returncode == 0
+        if exists:
+            # The artifact/version is unchanged; refresh the existing release
+            # so its metadata.json gains the repaired promotion contract.
+            cmd = ["gh", "release", "upload", tag, *asset_paths, str(meta_path),
+                   "--repo", repo, "--clobber"]
+        else:
+            cmd = [
+                "gh", "release", "create", tag,
+                *asset_paths, str(meta_path),
+                "--repo", repo,
+                "--prerelease",
+                "--title", f"{model_type} {beta['version']}",
+                "--notes", f"Beta candidate for {model_type}. Performance: {json.dumps(beta.get('performance', {}))}",
+            ]
         print(f"Running: {' '.join(cmd)}")
         subprocess.run(cmd, check=True)
 
