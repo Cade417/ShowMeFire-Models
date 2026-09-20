@@ -3,10 +3,14 @@ from __future__ import annotations
 import argparse,json,sys
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parent.parent));import paths
-from models.versioning import register_trained_model
+from models.register import ModelRegistrationSpec, register_beta
 from spatial.station_contract import sha256_file
 from spatial.rule_contract import RULE_SPEC_SHA256
 from spatial.precipitation import PRECIPITATION_CONTRACT_SHA256
+
+MODEL_TYPE = "fuel_moisture_station_guarded"
+ASSET_FILENAMES = {"model": "guarded_gru.pt", "base_model": "base_xgboost.json",
+                    "lead_guard": "lead_guard.json", "contract": "contract.json", "calibration": "calibration.json"}
 
 def validate_registration(candidate_dir, report):
     if report.get("status")!="prospective" or not report.get("pass") or not report.get("beta_registration_allowed"):
@@ -18,23 +22,23 @@ def validate_registration(candidate_dir, report):
     if mismatches:raise RuntimeError(f"V4 registration asset mismatch: {', '.join(mismatches)}")
     return shadow
 
+def _build_performance(report, context):
+    return {"checks":report["checks"],"candidate":report["candidate"],"incumbent":report["incumbent"],
+            "manifest_sha256":report["manifest_sha256"],"prospective_days":report["days"]}
+
+SPEC = ModelRegistrationSpec(
+    model_type=MODEL_TYPE,
+    asset_filenames=ASSET_FILENAMES,
+    validate_report=validate_registration,
+    build_candidate=lambda candidate_dir: None,
+    build_performance=_build_performance,
+)
+
 def main():
     parser=argparse.ArgumentParser();parser.add_argument("--candidate-dir",type=Path,default=paths.V4_CANDIDATE_DIR)
     parser.add_argument("--evaluation",type=Path,default=paths.REPORTS_DIR/"v4_precipitation-v1_prospective_evaluation.json");args=parser.parse_args()
-    report=json.loads(args.evaluation.read_text())
-    try:validate_registration(args.candidate_dir,report)
+    try:
+        version = register_beta(SPEC, report_path=args.evaluation, candidate_dir=args.candidate_dir)
     except RuntimeError as error:raise SystemExit(str(error)) from error
-    assets={"model":{"path":args.candidate_dir/"guarded_gru.pt"},"base_model":{"path":args.candidate_dir/"base_xgboost.json"},
-            "lead_guard":{"path":args.candidate_dir/"lead_guard.json"},"contract":{"path":args.candidate_dir/"contract.json"},
-            "calibration":{"path":args.candidate_dir/"calibration.json"}}
-    version=register_trained_model("fuel_moisture_station_guarded",channel="beta",assets=assets,
-      performance={"checks":report["checks"],"candidate":report["candidate"],"incumbent":report["incumbent"],
-                   "manifest_sha256":report["manifest_sha256"],"prospective_days":report["days"]})
-    # api/services/v4_shadow.py scores directly from this raw candidate_dir
-    # (SMF_V4_SHADOW_BUNDLE), not the versioned copy register_trained_model
-    # just made under models/versions/ - write the assigned version back
-    # here too, same pattern fire_weather_ml/register_beta.py already uses.
-    (args.candidate_dir/"registered_version.json").write_text(
-        json.dumps({"model_type":"fuel_moisture_station_guarded","version":version},indent=2),encoding="utf-8")
     print(json.dumps({"registered_version":version,"production_changed":False},indent=2))
 if __name__=="__main__":main()

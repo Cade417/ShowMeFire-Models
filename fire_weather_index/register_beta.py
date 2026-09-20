@@ -14,7 +14,6 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from pathlib import Path
 from typing import Dict
@@ -24,12 +23,12 @@ sys.path.insert(0, str(REPO_ROOT))
 
 import paths
 from fire_weather_index import calibrate, model_bundle
-from models.versioning import register_trained_model
+from models.register import ModelRegistrationSpec, register_beta
 
 MODEL_TYPE = "fire_weather_index"
 
 
-def validate_beta_registration(report: Dict) -> None:
+def _validate_report(candidate_dir: Path, report: Dict) -> Dict:
     if report.get("model_family") != "fire_weather_index":
         raise RuntimeError(f"refused: report model_family {report.get('model_family')!r} is not fire_weather_index")
     if not report.get("advisory_only"):
@@ -37,9 +36,10 @@ def validate_beta_registration(report: Dict) -> None:
     failed = [gate["name"] for gate in report.get("gates", []) if gate.get("status") == "fail"]
     if failed:
         raise RuntimeError(f"refused: gates failed: {failed}")
+    return {}
 
 
-def build_candidate(candidate_dir: Path) -> Dict:
+def _build_candidate(candidate_dir: Path) -> Dict:
     """Runs calibration fresh and writes both bundle assets into candidate_dir."""
     calibration = calibrate.run()
     weights_asset = model_bundle.build_factor_weights_asset()
@@ -49,6 +49,15 @@ def build_candidate(candidate_dir: Path) -> Dict:
     return calibration
 
 
+SPEC = ModelRegistrationSpec(
+    model_type=MODEL_TYPE,
+    asset_filenames=model_bundle.BUNDLE_ASSET_FILENAMES,
+    validate_report=_validate_report,
+    build_candidate=_build_candidate,
+    build_performance=lambda report, context: {"overall_pass": report["overall_pass"], "gates": report["gates"]},
+)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--report", type=Path, default=paths.REPORTS_DIR / "fire_weather_index_offline_evaluation.json",
@@ -56,29 +65,7 @@ def main():
     parser.add_argument("--candidate-dir", type=Path, default=paths.FIRE_WEATHER_INDEX_CANDIDATE_DIR)
     args = parser.parse_args()
 
-    if not args.report.exists():
-        raise SystemExit(f"No evaluation report at {args.report} - run `python -m fire_weather_index.evaluate` first")
-    report = json.loads(args.report.read_text(encoding="utf-8"))
-    validate_beta_registration(report)
-
-    build_candidate(args.candidate_dir)
-    assets = {role: str(args.candidate_dir / filename) for role, filename in model_bundle.BUNDLE_ASSET_FILENAMES.items()}
-    version = register_trained_model(
-        MODEL_TYPE, channel="beta",
-        assets={role: {"path": path} for role, path in assets.items()},
-        performance={"overall_pass": report["overall_pass"], "gates": report["gates"]},
-    )
-
-    # api/services/fire_weather_index_shadow.py scores directly from this raw
-    # candidate_dir (SMF_FIRE_WEATHER_INDEX_BUNDLE), not the versioned copy
-    # register_trained_model just made under models/versions/ - so the
-    # assigned version string needs writing back here too, same reason
-    # fire_weather_ml/register_beta.py already does this (this script was
-    # previously missing it entirely, leaving model_version permanently
-    # unknown to the shadow module and anything reading its bundle).
-    (args.candidate_dir / "registered_version.json").write_text(
-        json.dumps({"model_type": MODEL_TYPE, "version": version}, indent=2), encoding="utf-8")
-
+    version = register_beta(SPEC, report_path=args.report, candidate_dir=args.candidate_dir)
     print(f"Registered {MODEL_TYPE} beta version {version}")
 
 

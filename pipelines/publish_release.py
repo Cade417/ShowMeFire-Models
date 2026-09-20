@@ -19,6 +19,7 @@ from pathlib import Path
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from models.versioning import get_model_entry, load_active_model_path
+from models.model_types import KNOWN_MODEL_TYPES
 import paths
 
 
@@ -34,7 +35,6 @@ def publish(model_type, version=None, repo=None):
     if version and beta["version"] != version:
         raise SystemExit(f"Requested version {version!r} does not match current beta {beta['version']!r}")
 
-    model_path = load_active_model_path(model_type, channel="beta")
     tag = f"{model_type}-v{beta['version']}"
 
     with tempfile.TemporaryDirectory() as tmp:
@@ -47,7 +47,12 @@ def publish(model_type, version=None, repo=None):
                 asset_paths.append(str(path))
                 published_assets[role] = {**asset, "filename": path.name}
         else:
-            asset_paths.append(str(model_path))
+            # Only single-file candidates (no `assets` dict) rely on beta["file"]
+            # via load_active_model_path - multi-asset bundles that lack a
+            # model/checkpoint/static_bundle role leave beta["file"] as None,
+            # so calling this unconditionally would crash before ever reaching
+            # the assets branch above.
+            asset_paths.append(str(load_active_model_path(model_type, channel="beta")))
         meta_path.write_text(json.dumps({
             "model_type": model_type,
             "version": beta["version"],
@@ -87,7 +92,7 @@ def publish(model_type, version=None, repo=None):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Publish a beta model candidate as a GitHub pre-release")
-    parser.add_argument("--model", required=True, choices=["fuel_moisture", "fire_danger", "fuel_moisture_spatial"])
+    parser.add_argument("--model", required=True, choices=sorted(KNOWN_MODEL_TYPES))
     parser.add_argument("--version", default=None, help="Beta version to publish (defaults to the current beta)")
     parser.add_argument("--repo", default=None, help="owner/repo (defaults to SMF_GITHUB_REPO env var)")
     args = parser.parse_args()

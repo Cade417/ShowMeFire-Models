@@ -27,13 +27,17 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 import paths
-from models.versioning import register_trained_model
 from fire_weather_ml import model_bundle
+from models.register import ModelRegistrationSpec, register_beta
+
+MODEL_TYPE = "fire_weather_ml"
 
 REQUIRED_METADATA_FIELDS = (
     "feature_module_sha256", "label_module_sha256", "label_column",
     "model_family", "training_row_count", "split_manifest_sha256", "advisory_only",
 )
+
+ASSET_FILENAMES = {**model_bundle.BUNDLE_ASSET_FILENAMES, "contract": "contract.json"}
 
 
 def validate_beta_registration(candidate_dir: Path, report: Dict) -> Dict:
@@ -43,7 +47,8 @@ def validate_beta_registration(candidate_dir: Path, report: Dict) -> Dict:
     "not_applicable" gates don't block v1 registration, they're exactly
     what later phases (real historical panel, occurrence cross-check,
     prospective shadow) exist to close; and every bundle asset the fit
-    step should have written is present.
+    step should have written is present. Returns the parsed contract for
+    build_performance to derive metadata from.
     """
     if report.get("advisory_only") is not True:
         raise RuntimeError("fire_weather_ml beta registration refused: report is not advisory_only")
@@ -82,42 +87,35 @@ def build_metadata(report: Dict, candidate_contract: Dict) -> Dict:
     return metadata
 
 
+def _build_performance(report: Dict, candidate_contract: Dict) -> Dict:
+    return {
+        **build_metadata(report, candidate_contract),
+        "scores": report.get("scores"),
+        "gates": report.get("gates"),
+        "production_eligible": False,
+        "prospective_shadow_required": True,
+    }
+
+
+SPEC = ModelRegistrationSpec(
+    model_type=MODEL_TYPE,
+    asset_filenames=ASSET_FILENAMES,
+    validate_report=validate_beta_registration,
+    build_candidate=lambda candidate_dir: None,  # nothing to rebuild - fit_model.py already wrote the bundle
+    build_performance=_build_performance,
+)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--candidate-dir", type=Path, default=paths.FIRE_WEATHER_ML_CANDIDATE_DIR)
     parser.add_argument("--evaluation", type=Path, default=paths.REPORTS_DIR / "fire_weather_ml_offline_evaluation.json")
     args = parser.parse_args()
 
-    report = json.loads(args.evaluation.read_text())
     try:
-        candidate_contract = validate_beta_registration(args.candidate_dir, report)
-        metadata = build_metadata(report, candidate_contract)
+        version = register_beta(SPEC, report_path=args.evaluation, candidate_dir=args.candidate_dir)
     except RuntimeError as error:
         raise SystemExit(str(error)) from error
-
-    assets = {role: {"path": args.candidate_dir / filename}
-              for role, filename in model_bundle.BUNDLE_ASSET_FILENAMES.items()}
-    assets["contract"] = {"path": args.candidate_dir / "contract.json"}
-
-    version = register_trained_model(
-        "fire_weather_ml", channel="beta", assets=assets,
-        performance={
-            **metadata,
-            "scores": report.get("scores"),
-            "gates": report.get("gates"),
-            "production_eligible": False,
-            "prospective_shadow_required": True,
-        },
-    )
-
-    # api/services/fire_weather_ml_shadow.py scores directly from this raw
-    # candidate_dir (SMF_FIRE_WEATHER_ML_BUNDLE), not from the versioned
-    # copy register_trained_model just made under models/versions/ - so the
-    # assigned version string needs writing back here too, or the shadow
-    # module (and the graphics it renders) would have no way to know which
-    # registered version it's actually scoring.
-    (args.candidate_dir / "registered_version.json").write_text(
-        json.dumps({"model_type": "fire_weather_ml", "version": version}, indent=2), encoding="utf-8")
 
     print(json.dumps({"registered_version": version, "channel": "beta", "advisory_only": True,
                       "production_changed": False}, indent=2))

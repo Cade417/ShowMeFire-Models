@@ -25,10 +25,11 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 import paths
-from models.versioning import register_trained_model
+from models.register import ModelRegistrationSpec, register_beta
 from risk_fusion import model_bundle
 from risk_fusion.risk_fusion_evidence import POLICY_VERSION, policy_sha256
 
+MODEL_TYPE = "fire_risk_fusion"
 TRAINING_PANEL_PATH = paths.RISK_FUSION_DIR / "labeled_panel_2014_2020.csv"
 
 # The training-side registry (models/versioning.py, this repo) does not
@@ -42,6 +43,8 @@ REQUIRED_RISK_FUSION_METADATA_FIELDS = (
     "policy_version", "policy_sha256", "guard_active_row_fraction", "advisory_only",
 )
 
+ASSET_FILENAMES = {**model_bundle.BUNDLE_ASSET_FILENAMES, "contract": "contract.json"}
+
 
 def validate_beta_registration(candidate_dir: Path, report: Dict) -> Dict:
     """
@@ -51,6 +54,7 @@ def validate_beta_registration(candidate_dir: Path, report: Dict) -> Dict:
     "assumed_from_label_pipeline" gates don't block v1 registration,
     they're exactly what the prospective shadow phase exists to close;
     and every bundle asset the fit step should have written is present.
+    Returns the parsed contract for build_performance to derive metadata from.
     """
     if report.get("policy_version") != POLICY_VERSION:
         raise RuntimeError(
@@ -114,41 +118,36 @@ def build_metadata(report: Dict, contract: Dict) -> Dict:
     return metadata
 
 
+def _build_performance(report: Dict, contract: Dict) -> Dict:
+    return {
+        **build_metadata(report, contract),
+        "row_count": report.get("row_count"),
+        "scores": report.get("scores"),
+        "gates": report.get("gates"),
+        "production_eligible": False,
+        "prospective_shadow_required": True,
+    }
+
+
+SPEC = ModelRegistrationSpec(
+    model_type=MODEL_TYPE,
+    asset_filenames=ASSET_FILENAMES,
+    validate_report=validate_beta_registration,
+    build_candidate=lambda candidate_dir: None,  # nothing to rebuild - fit_risk_fusion.py already wrote the bundle
+    build_performance=_build_performance,
+)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--candidate-dir", type=Path, default=paths.RISK_FUSION_CANDIDATE_DIR)
     parser.add_argument("--evaluation", type=Path, default=paths.REPORTS_DIR / "risk_fusion_offline_evaluation.json")
     args = parser.parse_args()
 
-    report = json.loads(args.evaluation.read_text())
     try:
-        contract = validate_beta_registration(args.candidate_dir, report)
-        metadata = build_metadata(report, contract)
+        version = register_beta(SPEC, report_path=args.evaluation, candidate_dir=args.candidate_dir)
     except RuntimeError as error:
         raise SystemExit(str(error)) from error
-
-    assets = {role: {"path": args.candidate_dir / filename}
-              for role, filename in model_bundle.BUNDLE_ASSET_FILENAMES.items()}
-    assets["contract"] = {"path": args.candidate_dir / "contract.json"}
-
-    version = register_trained_model(
-        "fire_risk_fusion", channel="beta", assets=assets,
-        performance={
-            **metadata,
-            "row_count": report.get("row_count"),
-            "scores": report.get("scores"),
-            "gates": report.get("gates"),
-            "production_eligible": False,
-            "prospective_shadow_required": True,
-        },
-    )
-    # api/services/risk_fusion_glm_shadow.py scores directly from this raw
-    # candidate_dir (SMF_RISK_FUSION_GLM_BUNDLE), not the versioned copy
-    # register_trained_model just made under models/versions/ - write the
-    # assigned version back here too, same pattern
-    # fire_weather_ml/register_beta.py already uses.
-    (args.candidate_dir / "registered_version.json").write_text(
-        json.dumps({"model_type": "fire_risk_fusion", "version": version}, indent=2), encoding="utf-8")
 
     print(json.dumps({"registered_version": version, "channel": "beta", "advisory_only": True,
                       "production_changed": False}, indent=2))
