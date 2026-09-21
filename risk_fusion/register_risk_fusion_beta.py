@@ -135,6 +135,12 @@ SPEC = ModelRegistrationSpec(
     validate_report=validate_beta_registration,
     build_candidate=lambda candidate_dir: None,  # nothing to rebuild - fit_risk_fusion.py already wrote the bundle
     build_performance=_build_performance,
+    # build_metadata already computed the exact contract
+    # api/models/versioning.py::REQUIRED_RISK_FUSION_METADATA needs -
+    # previously only merged into performance (**build_metadata(...) above),
+    # never passed through as an actual metadata= argument, so it never
+    # reached publish_release.py's release or the server's promotion gate.
+    build_metadata=build_metadata,
 )
 
 

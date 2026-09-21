@@ -55,6 +55,16 @@ SPEC = ModelRegistrationSpec(
     validate_report=_validate_report,
     build_candidate=_build_candidate,
     build_performance=lambda report, context: {"overall_pass": report["overall_pass"], "gates": report["gates"]},
+    # api/models/versioning.py::REQUIRED_FIRE_WEATHER_INDEX_METADATA needs
+    # model_family/advisory_only as an actual metadata= record, not just
+    # inside performance - _validate_report above already confirmed both
+    # fields on the report, so this just carries them through. Missing
+    # metadata= entirely (the pre-existing gap this fixes) is exactly what
+    # made an imported fire_weather_index beta fail the server's promotion
+    # gate with "missing metadata: advisory_only, model_family".
+    build_metadata=lambda report, context: {
+        "model_family": report["model_family"], "advisory_only": report["advisory_only"],
+    },
 )
 
 

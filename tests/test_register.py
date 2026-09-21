@@ -107,6 +107,67 @@ class RegisterBetaTests(unittest.TestCase):
                 with self.assertRaises(RuntimeError):
                     register_beta(spec, report_path=report_path, candidate_dir=candidate_dir)
 
+    def test_build_metadata_is_stored_as_a_real_metadata_field_not_just_merged_into_performance(self):
+        # Regression test for a real bug found in production: several
+        # model types (fire_weather_index/fire_weather_ml/fire_risk_fusion)
+        # computed the promotion-gate contract but only ever merged it into
+        # `performance` - register_beta() had no build_metadata field at
+        # all, so it never reached register_trained_model's metadata=
+        # argument, publish_release.py's release payload, or the server's
+        # validate_promotion_candidate() gate. An imported beta ended up
+        # with metadata={}, failing promotion with
+        # "missing metadata: advisory_only, model_family" even though the
+        # data existed the whole time - just in the wrong field.
+        with tempfile.TemporaryDirectory() as root:
+            root_path = Path(root)
+            candidate_dir = root_path / "candidate"
+            candidate_dir.mkdir()
+
+            report_path = root_path / "report.json"
+            report_path.write_text(json.dumps({"overall_pass": True, "gates": []}))
+
+            spec = ModelRegistrationSpec(
+                model_type="fake_model_with_metadata",
+                asset_filenames={"weights": "weights.json"},
+                validate_report=lambda candidate_dir, report: report,
+                build_candidate=lambda directory: (directory / "weights.json").write_text("{}"),
+                build_performance=lambda report, context: {"overall_pass": report["overall_pass"]},
+                build_metadata=lambda report, context: {"model_family": "fake", "advisory_only": True},
+            )
+
+            patches = self._isolated_registry(root_path)
+            with patches[0], patches[1], patches[2], patches[3]:
+                register_beta(spec, report_path=report_path, candidate_dir=candidate_dir)
+                config = json.loads(versioning.CONFIG_PATH.read_text())
+
+            beta = config["fake_model_with_metadata"]["beta"]
+            self.assertEqual(beta["metadata"], {"model_family": "fake", "advisory_only": True})
+            self.assertEqual(beta["performance"], {"overall_pass": True})
+
+    def test_build_metadata_is_optional(self):
+        with tempfile.TemporaryDirectory() as root:
+            root_path = Path(root)
+            candidate_dir = root_path / "candidate"
+            candidate_dir.mkdir()
+
+            report_path = root_path / "report.json"
+            report_path.write_text(json.dumps({"overall_pass": True}))
+
+            spec = ModelRegistrationSpec(
+                model_type="fake_model_no_metadata",
+                asset_filenames={"weights": "weights.json"},
+                validate_report=lambda candidate_dir, report: report,
+                build_candidate=lambda directory: (directory / "weights.json").write_text("{}"),
+                build_performance=lambda report, context: {"overall_pass": report["overall_pass"]},
+            )
+
+            patches = self._isolated_registry(root_path)
+            with patches[0], patches[1], patches[2], patches[3]:
+                register_beta(spec, report_path=report_path, candidate_dir=candidate_dir)
+                config = json.loads(versioning.CONFIG_PATH.read_text())
+
+            self.assertNotIn("metadata", config["fake_model_no_metadata"]["beta"])
+
     def test_raises_a_clear_error_when_the_report_is_missing(self):
         with tempfile.TemporaryDirectory() as root:
             root_path = Path(root)

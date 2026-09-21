@@ -22,7 +22,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Dict
+from typing import Callable, Dict, Optional
 
 from models.versioning import register_trained_model
 
@@ -34,6 +34,17 @@ class ModelRegistrationSpec:
     validate_report: Callable[[Path, dict], dict]
     build_candidate: Callable[[Path], None]
     build_performance: Callable[[dict, dict], dict]
+    # Separate from build_performance: this is the promotion-gate CONTRACT
+    # (advisory_only, model_family, checksums, etc. - whatever the api-side
+    # registry's validate_promotion_candidate() actually requires for this
+    # model_type), not evaluation metrics. Real bug this fixed: several
+    # scripts computed exactly this contract already but only ever merged
+    # it into `performance` (via **build_metadata(...)) - register_beta()
+    # never had anywhere to put it as an actual `metadata=` argument, so it
+    # never reached publish_release.py's `model_metadata` release field or
+    # the server's gate at all. None means "this model type has no
+    # metadata contract to carry" (register_trained_model gets metadata=None).
+    build_metadata: Optional[Callable[[dict, dict], dict]] = None
     write_back_registered_version: bool = True
 
 
@@ -52,6 +63,7 @@ def register_beta(spec: ModelRegistrationSpec, report_path: Path, candidate_dir:
     version = register_trained_model(
         spec.model_type, channel="beta", assets=assets,
         performance=spec.build_performance(report, context),
+        metadata=spec.build_metadata(report, context) if spec.build_metadata else None,
     )
 
     if spec.write_back_registered_version:
