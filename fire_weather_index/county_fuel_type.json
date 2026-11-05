@@ -1,0 +1,585 @@
+{
+  "schema": "county-fuel-type-v1",
+  "source_bundle": "fire_behavior_static_2026.4.nc",
+  "grid_shape": [
+    256,
+    256
+  ],
+  "counties": {
+    "29001": {
+      "dominant_fbfm40": 102.0,
+      "fuel_group": "grass",
+      "canopy_cover_pct_mean": 20.65326738357544
+    },
+    "29003": {
+      "dominant_fbfm40": 93.0,
+      "fuel_group": "nonburnable",
+      "canopy_cover_pct_mean": 10.4480213901271
+    },
+    "29005": {
+      "dominant_fbfm40": 93.0,
+      "fuel_group": "nonburnable",
+      "canopy_cover_pct_mean": 3.899477012029716
+    },
+    "29007": {
+      "dominant_fbfm40": 93.0,
+      "fuel_group": "nonburnable",
+      "canopy_cover_pct_mean": 8.376596113206238
+    },
+    "29009": {
+      "dominant_fbfm40": 102.0,
+      "fuel_group": "grass",
+      "canopy_cover_pct_mean": 33.4243934420706
+    },
+    "29011": {
+      "dominant_fbfm40": 93.0,
+      "fuel_group": "nonburnable",
+      "canopy_cover_pct_mean": 10.102900443923089
+    },
+    "29013": {
+      "dominant_fbfm40": 102.0,
+      "fuel_group": "grass",
+      "canopy_cover_pct_mean": 11.392432615693126
+    },
+    "29015": {
+      "dominant_fbfm40": 102.0,
+      "fuel_group": "grass",
+      "canopy_cover_pct_mean": 34.992503345915765
+    },
+    "29017": {
+      "dominant_fbfm40": 189.0,
+      "fuel_group": "timber",
+      "canopy_cover_pct_mean": 43.15546756614874
+    },
+    "29019": {
+      "dominant_fbfm40": 186.0,
+      "fuel_group": "timber",
+      "canopy_cover_pct_mean": 27.24261821953805
+    },
+    "29021": {
+      "dominant_fbfm40": 93.0,
+      "fuel_group": "nonburnable",
+      "canopy_cover_pct_mean": 12.705857778037036
+    },
+    "29023": {
+      "dominant_fbfm40": 93.0,
+      "fuel_group": "nonburnable",
+      "canopy_cover_pct_mean": 26.314729992138304
+    },
+    "29025": {
+      "dominant_fbfm40": 102.0,
+      "fuel_group": "grass",
+      "canopy_cover_pct_mean": 11.286863956130853
+    },
+    "29027": {
+      "dominant_fbfm40": 102.0,
+      "fuel_group": "grass",
+      "canopy_cover_pct_mean": 31.664353025013998
+    },
+    "29029": {
+      "dominant_fbfm40": 189.0,
+      "fuel_group": "timber",
+      "canopy_cover_pct_mean": 45.77895110135251
+    },
+    "29031": {
+      "dominant_fbfm40": 102.0,
+      "fuel_group": "grass",
+      "canopy_cover_pct_mean": 22.109004439099838
+    },
+    "29033": {
+      "dominant_fbfm40": 93.0,
+      "fuel_group": "nonburnable",
+      "canopy_cover_pct_mean": 9.852274765326678
+    },
+    "29035": {
+      "dominant_fbfm40": 189.0,
+      "fuel_group": "timber",
+      "canopy_cover_pct_mean": 62.73825286155523
+    },
+    "29037": {
+      "dominant_fbfm40": 102.0,
+      "fuel_group": "grass",
+      "canopy_cover_pct_mean": 11.586217639865456
+    },
+    "29039": {
+      "dominant_fbfm40": 102.0,
+      "fuel_group": "grass",
+      "canopy_cover_pct_mean": 28.366229835897684
+    },
+    "29041": {
+      "dominant_fbfm40": 93.0,
+      "fuel_group": "nonburnable",
+      "canopy_cover_pct_mean": 11.34352583957441
+    },
+    "29043": {
+      "dominant_fbfm40": 102.0,
+      "fuel_group": "grass",
+      "canopy_cover_pct_mean": 34.96699192682902
+    },
+    "29045": {
+      "dominant_fbfm40": 93.0,
+      "fuel_group": "nonburnable",
+      "canopy_cover_pct_mean": 18.70925866171371
+    },
+    "29047": {
+      "dominant_fbfm40": 102.0,
+      "fuel_group": "grass",
+      "canopy_cover_pct_mean": 12.42413314325469
+    },
+    "29049": {
+      "dominant_fbfm40": 93.0,
+      "fuel_group": "nonburnable",
+      "canopy_cover_pct_mean": 9.023933166494736
+    },
+    "29051": {
+      "dominant_fbfm40": 102.0,
+      "fuel_group": "grass",
+      "canopy_cover_pct_mean": 29.18831749497173
+    },
+    "29053": {
+      "dominant_fbfm40": 93.0,
+      "fuel_group": "nonburnable",
+      "canopy_cover_pct_mean": 17.06277840089478
+    },
+    "29055": {
+      "dominant_fbfm40": 189.0,
+      "fuel_group": "timber",
+      "canopy_cover_pct_mean": 51.072472903603
+    },
+    "29057": {
+      "dominant_fbfm40": 102.0,
+      "fuel_group": "grass",
+      "canopy_cover_pct_mean": 16.948601984519225
+    },
+    "29059": {
+      "dominant_fbfm40": 102.0,
+      "fuel_group": "grass",
+      "canopy_cover_pct_mean": 34.320207132515336
+    },
+    "29061": {
+      "dominant_fbfm40": 93.0,
+      "fuel_group": "nonburnable",
+      "canopy_cover_pct_mean": 12.91568068964728
+    },
+    "29063": {
+      "dominant_fbfm40": 93.0,
+      "fuel_group": "nonburnable",
+      "canopy_cover_pct_mean": 8.44401768987829
+    },
+    "29065": {
+      "dominant_fbfm40": 189.0,
+      "fuel_group": "timber",
+      "canopy_cover_pct_mean": 48.703566113698116
+    },
+    "29067": {
+      "dominant_fbfm40": 102.0,
+      "fuel_group": "grass",
+      "canopy_cover_pct_mean": 44.165444613633
+    },
+    "29069": {
+      "dominant_fbfm40": 93.0,
+      "fuel_group": "nonburnable",
+      "canopy_cover_pct_mean": 5.1433329229605285
+    },
+    "29071": {
+      "dominant_fbfm40": 189.0,
+      "fuel_group": "timber",
+      "canopy_cover_pct_mean": 38.23161696605995
+    },
+    "29073": {
+      "dominant_fbfm40": 102.0,
+      "fuel_group": "grass",
+      "canopy_cover_pct_mean": 42.133316380637034
+    },
+    "29075": {
+      "dominant_fbfm40": 102.0,
+      "fuel_group": "grass",
+      "canopy_cover_pct_mean": 10.357666744933866
+    },
+    "29077": {
+      "dominant_fbfm40": 102.0,
+      "fuel_group": "grass",
+      "canopy_cover_pct_mean": 18.291694650988607
+    },
+    "29079": {
+      "dominant_fbfm40": 102.0,
+      "fuel_group": "grass",
+      "canopy_cover_pct_mean": 11.817702678533701
+    },
+    "29081": {
+      "dominant_fbfm40": 102.0,
+      "fuel_group": "grass",
+      "canopy_cover_pct_mean": 12.800740964828975
+    },
+    "29083": {
+      "dominant_fbfm40": 102.0,
+      "fuel_group": "grass",
+      "canopy_cover_pct_mean": 17.205772237645256
+    },
+    "29085": {
+      "dominant_fbfm40": 102.0,
+      "fuel_group": "grass",
+      "canopy_cover_pct_mean": 37.12090789420264
+    },
+    "29087": {
+      "dominant_fbfm40": 93.0,
+      "fuel_group": "nonburnable",
+      "canopy_cover_pct_mean": 7.260637008790242
+    },
+    "29089": {
+      "dominant_fbfm40": 93.0,
+      "fuel_group": "nonburnable",
+      "canopy_cover_pct_mean": 21.84861001660747
+    },
+    "29091": {
+      "dominant_fbfm40": 102.0,
+      "fuel_group": "grass",
+      "canopy_cover_pct_mean": 34.45588683287303
+    },
+    "29093": {
+      "dominant_fbfm40": 189.0,
+      "fuel_group": "timber",
+      "canopy_cover_pct_mean": 62.83764747619629
+    },
+    "29095": {
+      "dominant_fbfm40": 91.0,
+      "fuel_group": "nonburnable",
+      "canopy_cover_pct_mean": 15.431354223254198
+    },
+    "29097": {
+      "dominant_fbfm40": 102.0,
+      "fuel_group": "grass",
+      "canopy_cover_pct_mean": 13.215742267411331
+    },
+    "29099": {
+      "dominant_fbfm40": 189.0,
+      "fuel_group": "timber",
+      "canopy_cover_pct_mean": 46.353717424716166
+    },
+    "29101": {
+      "dominant_fbfm40": 102.0,
+      "fuel_group": "grass",
+      "canopy_cover_pct_mean": 14.553054300272409
+    },
+    "29103": {
+      "dominant_fbfm40": 93.0,
+      "fuel_group": "nonburnable",
+      "canopy_cover_pct_mean": 13.363717522732047
+    },
+    "29105": {
+      "dominant_fbfm40": 102.0,
+      "fuel_group": "grass",
+      "canopy_cover_pct_mean": 37.11597293951573
+    },
+    "29107": {
+      "dominant_fbfm40": 93.0,
+      "fuel_group": "nonburnable",
+      "canopy_cover_pct_mean": 8.661074223906494
+    },
+    "29109": {
+      "dominant_fbfm40": 102.0,
+      "fuel_group": "grass",
+      "canopy_cover_pct_mean": 13.893230015646198
+    },
+    "29111": {
+      "dominant_fbfm40": 93.0,
+      "fuel_group": "nonburnable",
+      "canopy_cover_pct_mean": 15.961022245350168
+    },
+    "29113": {
+      "dominant_fbfm40": 93.0,
+      "fuel_group": "nonburnable",
+      "canopy_cover_pct_mean": 24.043673782121566
+    },
+    "29115": {
+      "dominant_fbfm40": 102.0,
+      "fuel_group": "grass",
+      "canopy_cover_pct_mean": 12.025974299013615
+    },
+    "29117": {
+      "dominant_fbfm40": 93.0,
+      "fuel_group": "nonburnable",
+      "canopy_cover_pct_mean": 13.577593301204924
+    },
+    "29119": {
+      "dominant_fbfm40": 102.0,
+      "fuel_group": "grass",
+      "canopy_cover_pct_mean": 41.68912439819769
+    },
+    "29121": {
+      "dominant_fbfm40": 102.0,
+      "fuel_group": "grass",
+      "canopy_cover_pct_mean": 19.085140457940756
+    },
+    "29123": {
+      "dominant_fbfm40": 189.0,
+      "fuel_group": "timber",
+      "canopy_cover_pct_mean": 57.498163267623546
+    },
+    "29125": {
+      "dominant_fbfm40": 102.0,
+      "fuel_group": "grass",
+      "canopy_cover_pct_mean": 37.639394076117156
+    },
+    "29127": {
+      "dominant_fbfm40": 93.0,
+      "fuel_group": "nonburnable",
+      "canopy_cover_pct_mean": 16.689453175793524
+    },
+    "29129": {
+      "dominant_fbfm40": 102.0,
+      "fuel_group": "grass",
+      "canopy_cover_pct_mean": 18.07940068285344
+    },
+    "29131": {
+      "dominant_fbfm40": 189.0,
+      "fuel_group": "timber",
+      "canopy_cover_pct_mean": 40.490079356778054
+    },
+    "29133": {
+      "dominant_fbfm40": 93.0,
+      "fuel_group": "nonburnable",
+      "canopy_cover_pct_mean": 5.764778819759335
+    },
+    "29135": {
+      "dominant_fbfm40": 102.0,
+      "fuel_group": "grass",
+      "canopy_cover_pct_mean": 18.955467886274512
+    },
+    "29137": {
+      "dominant_fbfm40": 93.0,
+      "fuel_group": "nonburnable",
+      "canopy_cover_pct_mean": 16.633171858507044
+    },
+    "29139": {
+      "dominant_fbfm40": 93.0,
+      "fuel_group": "nonburnable",
+      "canopy_cover_pct_mean": 24.879566630283435
+    },
+    "29141": {
+      "dominant_fbfm40": 189.0,
+      "fuel_group": "timber",
+      "canopy_cover_pct_mean": 37.21791318847287
+    },
+    "29143": {
+      "dominant_fbfm40": 93.0,
+      "fuel_group": "nonburnable",
+      "canopy_cover_pct_mean": 3.6469328604781857
+    },
+    "29145": {
+      "dominant_fbfm40": 102.0,
+      "fuel_group": "grass",
+      "canopy_cover_pct_mean": 24.01618050932884
+    },
+    "29147": {
+      "dominant_fbfm40": 93.0,
+      "fuel_group": "nonburnable",
+      "canopy_cover_pct_mean": 5.650009302966363
+    },
+    "29149": {
+      "dominant_fbfm40": 102.0,
+      "fuel_group": "grass",
+      "canopy_cover_pct_mean": 46.24214675379734
+    },
+    "29151": {
+      "dominant_fbfm40": 102.0,
+      "fuel_group": "grass",
+      "canopy_cover_pct_mean": 36.98660599046452
+    },
+    "29153": {
+      "dominant_fbfm40": 102.0,
+      "fuel_group": "grass",
+      "canopy_cover_pct_mean": 43.03863471569401
+    },
+    "29155": {
+      "dominant_fbfm40": 93.0,
+      "fuel_group": "nonburnable",
+      "canopy_cover_pct_mean": 3.123481193969723
+    },
+    "29157": {
+      "dominant_fbfm40": 189.0,
+      "fuel_group": "timber",
+      "canopy_cover_pct_mean": 28.947049116994453
+    },
+    "29159": {
+      "dominant_fbfm40": 93.0,
+      "fuel_group": "nonburnable",
+      "canopy_cover_pct_mean": 12.641278260912975
+    },
+    "29161": {
+      "dominant_fbfm40": 189.0,
+      "fuel_group": "timber",
+      "canopy_cover_pct_mean": 47.34805785814921
+    },
+    "29163": {
+      "dominant_fbfm40": 93.0,
+      "fuel_group": "nonburnable",
+      "canopy_cover_pct_mean": 22.321162451458516
+    },
+    "29165": {
+      "dominant_fbfm40": 93.0,
+      "fuel_group": "nonburnable",
+      "canopy_cover_pct_mean": 15.65192355189407
+    },
+    "29167": {
+      "dominant_fbfm40": 102.0,
+      "fuel_group": "grass",
+      "canopy_cover_pct_mean": 23.160119545610645
+    },
+    "29169": {
+      "dominant_fbfm40": 189.0,
+      "fuel_group": "timber",
+      "canopy_cover_pct_mean": 48.59181424404712
+    },
+    "29171": {
+      "dominant_fbfm40": 102.0,
+      "fuel_group": "grass",
+      "canopy_cover_pct_mean": 19.571569740772247
+    },
+    "29173": {
+      "dominant_fbfm40": 93.0,
+      "fuel_group": "nonburnable",
+      "canopy_cover_pct_mean": 18.2898288667202
+    },
+    "29175": {
+      "dominant_fbfm40": 102.0,
+      "fuel_group": "grass",
+      "canopy_cover_pct_mean": 19.480869605427696
+    },
+    "29177": {
+      "dominant_fbfm40": 93.0,
+      "fuel_group": "nonburnable",
+      "canopy_cover_pct_mean": 14.303789922574751
+    },
+    "29179": {
+      "dominant_fbfm40": 189.0,
+      "fuel_group": "timber",
+      "canopy_cover_pct_mean": 63.12794677070949
+    },
+    "29181": {
+      "dominant_fbfm40": 189.0,
+      "fuel_group": "timber",
+      "canopy_cover_pct_mean": 50.726237048645935
+    },
+    "29183": {
+      "dominant_fbfm40": 93.0,
+      "fuel_group": "nonburnable",
+      "canopy_cover_pct_mean": 20.84584824035042
+    },
+    "29185": {
+      "dominant_fbfm40": 102.0,
+      "fuel_group": "grass",
+      "canopy_cover_pct_mean": 31.964766257934357
+    },
+    "29186": {
+      "dominant_fbfm40": 189.0,
+      "fuel_group": "timber",
+      "canopy_cover_pct_mean": 44.57174177242048
+    },
+    "29187": {
+      "dominant_fbfm40": 189.0,
+      "fuel_group": "timber",
+      "canopy_cover_pct_mean": 43.24826020709539
+    },
+    "29189": {
+      "dominant_fbfm40": 91.0,
+      "fuel_group": "nonburnable",
+      "canopy_cover_pct_mean": 18.797361950804717
+    },
+    "29195": {
+      "dominant_fbfm40": 93.0,
+      "fuel_group": "nonburnable",
+      "canopy_cover_pct_mean": 9.471998030129743
+    },
+    "29197": {
+      "dominant_fbfm40": 102.0,
+      "fuel_group": "grass",
+      "canopy_cover_pct_mean": 14.912150252156142
+    },
+    "29199": {
+      "dominant_fbfm40": 93.0,
+      "fuel_group": "nonburnable",
+      "canopy_cover_pct_mean": 12.92961054479974
+    },
+    "29201": {
+      "dominant_fbfm40": 93.0,
+      "fuel_group": "nonburnable",
+      "canopy_cover_pct_mean": 7.737558893992433
+    },
+    "29203": {
+      "dominant_fbfm40": 189.0,
+      "fuel_group": "timber",
+      "canopy_cover_pct_mean": 59.999177682712286
+    },
+    "29205": {
+      "dominant_fbfm40": 93.0,
+      "fuel_group": "nonburnable",
+      "canopy_cover_pct_mean": 13.945751006715
+    },
+    "29207": {
+      "dominant_fbfm40": 93.0,
+      "fuel_group": "nonburnable",
+      "canopy_cover_pct_mean": 9.801375980779023
+    },
+    "29209": {
+      "dominant_fbfm40": 189.0,
+      "fuel_group": "timber",
+      "canopy_cover_pct_mean": 38.61629956610062
+    },
+    "29211": {
+      "dominant_fbfm40": 102.0,
+      "fuel_group": "grass",
+      "canopy_cover_pct_mean": 17.477336948058184
+    },
+    "29213": {
+      "dominant_fbfm40": 189.0,
+      "fuel_group": "timber",
+      "canopy_cover_pct_mean": 47.48672428363707
+    },
+    "29215": {
+      "dominant_fbfm40": 102.0,
+      "fuel_group": "grass",
+      "canopy_cover_pct_mean": 41.48966227346851
+    },
+    "29217": {
+      "dominant_fbfm40": 102.0,
+      "fuel_group": "grass",
+      "canopy_cover_pct_mean": 16.329694717853993
+    },
+    "29219": {
+      "dominant_fbfm40": 189.0,
+      "fuel_group": "timber",
+      "canopy_cover_pct_mean": 38.67298255677809
+    },
+    "29221": {
+      "dominant_fbfm40": 189.0,
+      "fuel_group": "timber",
+      "canopy_cover_pct_mean": 58.0755919068303
+    },
+    "29223": {
+      "dominant_fbfm40": 189.0,
+      "fuel_group": "timber",
+      "canopy_cover_pct_mean": 60.91882730861606
+    },
+    "29225": {
+      "dominant_fbfm40": 102.0,
+      "fuel_group": "grass",
+      "canopy_cover_pct_mean": 30.504688565836013
+    },
+    "29227": {
+      "dominant_fbfm40": 102.0,
+      "fuel_group": "grass",
+      "canopy_cover_pct_mean": 12.948723134241606
+    },
+    "29229": {
+      "dominant_fbfm40": 102.0,
+      "fuel_group": "grass",
+      "canopy_cover_pct_mean": 34.22927592141288
+    },
+    "29510": {
+      "dominant_fbfm40": 91.0,
+      "fuel_group": "nonburnable",
+      "canopy_cover_pct_mean": 2.01752118104034
+    }
+  }
+}

@@ -9,6 +9,11 @@ VARIABLES = {
     "fuel_moisture": ("fuel_moisture_set_1", "fuel_moisture_value_1", "fuel_moisture"),
     "obs_temp": ("air_temp_set_1", "air_temp_value_1", "air_temp"),
     "obs_rh": ("relative_humidity_set_1", "relative_humidity_value_1", "relative_humidity"),
+    "obs_wind_ms": ("wind_speed_set_1", "wind_speed_value_1", "wind_speed"),
+    # Requested from Synoptic (services/synoptic.py's vars= list) but never
+    # extracted until now. Same raw-key convention and units as obs_wind_ms -
+    # no unit conversion is applied here for either, by existing precedent.
+    "obs_wind_gust_ms": ("wind_gust_set_1", "wind_gust_value_1", "wind_gust"),
 }
 
 
@@ -20,9 +25,12 @@ def _series(obs, candidates, count):
     return [None] * count
 
 
-def load_observations(directory: Path) -> pd.DataFrame:
+def load_observations(directory: Path, progress=None) -> pd.DataFrame:
     records = []
-    for path in sorted(Path(directory).glob("raw_data_*.json")):
+    paths = sorted(Path(directory).glob("raw_data_*.json"))
+    for number, path in enumerate(paths, 1):
+        if progress is not None:
+            progress(number, len(paths), path)
         try:
             body = json.loads(path.read_text())
         except (OSError, json.JSONDecodeError):
@@ -70,4 +78,30 @@ def causal_initial_and_targets(station_obs, init_time, valid_times, max_age_hour
         else:
             nearest = candidates.iloc[(candidates.time - valid).abs().argmin()]
             targets.append((float(nearest.fuel_moisture), nearest.time))
+    return initial_fm, age, targets
+
+
+def causal_initial_and_weather_targets(station_obs, init_time, valid_times,
+                                       max_age_hours=3, tolerance_minutes=30):
+    """Align FM/RH/wind labels to one nearest station observation per valid time."""
+    initial_fm, age, _ = causal_initial_and_targets(
+        station_obs, init_time, [], max_age_hours=max_age_hours,
+        tolerance_minutes=tolerance_minutes)
+    tolerance = pd.Timedelta(minutes=tolerance_minutes); targets = []
+    for valid in map(pd.Timestamp, valid_times):
+        valid = valid.tz_localize("UTC") if valid.tzinfo is None else valid.tz_convert("UTC")
+        candidates = station_obs[(station_obs.time >= valid - tolerance) &
+                                 (station_obs.time <= valid + tolerance)]
+        candidates = candidates[candidates.fuel_moisture.notna()]
+        if candidates.empty:
+            targets.append({"target_fm": float("nan"), "target_rh": float("nan"),
+                            "target_wind_ms": float("nan"), "target_time": None,
+                            "target_match_age_minutes": float("nan")})
+            continue
+        nearest = candidates.iloc[(candidates.time - valid).abs().argmin()]
+        targets.append({"target_fm": float(nearest.fuel_moisture),
+                        "target_rh": float(nearest.obs_rh) if pd.notna(nearest.obs_rh) else float("nan"),
+                        "target_wind_ms": float(nearest.obs_wind_ms) if pd.notna(nearest.obs_wind_ms) else float("nan"),
+                        "target_time": nearest.time,
+                        "target_match_age_minutes": abs((nearest.time - valid).total_seconds()) / 60})
     return initial_fm, age, targets

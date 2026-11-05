@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ShowMeFire - Migration to local HDD</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 { color: #333; }
+        .phase-box {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .phase-header { display: flex; justify-content: space-between; align-items: baseline; }
+        .phase-title { font-size: 18px; font-weight: bold; }
+        .phase-status { font-size: 13px; padding: 2px 8px; border-radius: 10px; color: white; }
+        .status-running { background: #007bff; }
+        .status-completed { background: #28a745; }
+        .status-completed_with_errors { background: #e0a800; }
+        .status-failed { background: #dc3545; }
+        .status-skipped { background: #6c757d; }
+        .status-pending { background: #adb5bd; }
+        .bar-track { background: #eee; border-radius: 6px; height: 18px; margin: 10px 0; overflow: hidden; }
+        .bar-fill { background: #007bff; height: 100%; width: 0%; transition: width 0.4s; }
+        .meta { font-size: 13px; color: #666; }
+        .current-file { font-family: monospace; font-size: 12px; color: #444; word-break: break-all; }
+        .errors { max-height: 140px; overflow-y: auto; margin-top: 10px; font-size: 12px; }
+        .error-row { color: #b02a37; padding: 2px 0; }
+        .updated { font-size: 12px; color: #999; margin-top: 30px; text-align: right; }
+        .empty { color: #999; font-style: italic; }
+    </style>
+</head>
+<body>
+    <h1>ShowMeFire - Migration to local HDD</h1>
+    <p class="meta">Polling /status every 2s. Read-only - run r2_inventory.py / r2_pull.py /
+        server_pull.py / r2_delete.py separately from the command line; this page never
+        triggers or stops anything.</p>
+    <div id="phases"><p class="empty">Loading...</p></div>
+    <div class="updated" id="updated"></div>
+
+    <script>
+        const PHASE_ORDER = ["server_pull", "inventory", "r2_pull", "r2_delete"];
+        const PHASE_LABELS = {
+            server_pull: "Server archive pull (SSH/rsync)",
+            inventory: "R2 bucket inventory",
+            r2_pull: "R2 pull to local disk",
+            r2_delete: "R2 delete (post-verification)",
+        };
+
+        function formatBytes(n) {
+            if (!n && n !== 0) return "?";
+            const units = ["B", "KB", "MB", "GB", "TB"];
+            let i = 0;
+            while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+            return n.toFixed(2) + " " + units[i];
+        }
+
+        function renderPhase(key, block) {
+            block = block || { status: "pending" };
+            const status = block.status || "pending";
+            const filesTotal = block.files_total || 0;
+            const filesDone = block.files_done || 0;
+            const bytesTotal = block.bytes_total || 0;
+            const bytesDone = block.bytes_done || 0;
+            const pct = filesTotal ? Math.min(100, Math.round((filesDone / filesTotal) * 100)) : 0;
+            const errors = block.errors || [];
+            return `
+                <div class="phase-box">
+                    <div class="phase-header">
+                        <span class="phase-title">${PHASE_LABELS[key] || key}</span>
+                        <span class="phase-status status-${status}">${status}</span>
+                    </div>
+                    <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
+                    <div class="meta">
+                        ${filesTotal ? `${filesDone} / ${filesTotal} objects` : ""}
+                        ${bytesTotal ? ` &middot; ${formatBytes(bytesDone)} / ${formatBytes(bytesTotal)}` : ""}
+                    </div>
+                    ${block.message ? `<div class="meta">${block.message}</div>` : ""}
+                    ${block.current_file ? `<div class="current-file">${block.current_file}</div>` : ""}
+                    ${errors.length ? `<div class="errors">${errors.slice(-20).map(e =>
+                        `<div class="error-row">${e.key || ""}: ${e.error || ""}</div>`).join("")}</div>` : ""}
+                </div>`;
+        }
+
+        async function poll() {
+            try {
+                const response = await fetch("/status");
+                const data = await response.json();
+                const phases = data.phases || {};
+                document.getElementById("phases").innerHTML =
+                    PHASE_ORDER.map(key => renderPhase(key, phases[key])).join("");
+                document.getElementById("updated").textContent =
+                    data.updated_at ? `Last updated: ${data.updated_at}` : "";
+            } catch (err) {
+                document.getElementById("phases").innerHTML = `<p class="empty">Dashboard cannot reach /status: ${err}</p>`;
+            }
+        }
+
+        poll();
+        setInterval(poll, 2000);
+    </script>
+</body>
+</html>

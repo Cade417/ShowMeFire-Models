@@ -1,0 +1,7 @@
+# Deps for scripts/migration/ (R2 + server -> local HDD migration tool and
+# its progress dashboard) only. Deliberately not in requirements.txt - see
+# that file's note that serving-only deps (fastapi, uvicorn, boto3/R2) are
+# excluded from the base training environment.
+boto3==1.42.16
+fastapi==0.124.0
+uvicorn==0.38.0

@@ -55,7 +55,16 @@ def _save_config(config):
     temp = CONFIG_PATH.with_suffix(CONFIG_PATH.suffix + ".tmp")
     with open(temp, "w") as f:
         json.dump(config, f, indent=2)
-    temp.replace(CONFIG_PATH)
+    try:
+        temp.replace(CONFIG_PATH)
+    except PermissionError:
+        # Some Windows/network volumes permit writes but deny replace while a
+        # reader has the registry open. Keep the already-complete temp file as
+        # the source and flush the destination before removing it.
+        with open(temp, "r", encoding="utf-8") as source, open(CONFIG_PATH, "w", encoding="utf-8") as destination:
+            destination.write(source.read())
+            destination.flush()
+        temp.unlink()
 
 
 def _entry(model_type, config):
@@ -114,14 +123,21 @@ def next_version(model_type, bump="patch", beta=False):
     return f"{base}-beta.1"
 
 
-def register_trained_model(model_type, source_path=None, performance=None, bump="patch", channel="beta", assets=None,
-                           metadata=None):
+def register_trained_model(model_type, source_path=None, performance=None, bump="patch", channel="beta",
+                            assets=None, metadata=None):
     """Register a freshly trained model artifact under the given channel.
 
     Copies `source_path` into models/versions/ under an immutable, versioned
     filename, updates config.json, and returns the assigned version string.
     Defaults to the `beta` channel so a retrain never silently replaces what
     is currently being served.
+
+    `metadata`: the promotion-gate contract (feature_schema_version,
+    feature_ranges, training_window, shadow_required, etc. - see
+    pipelines/train_model.py/repair_beta_metadata.py for the full shape).
+    Stored on the record as-is; this function doesn't interpret or validate
+    it, since what a gate requires is model-type-specific and belongs in
+    the API-side registry's validate_promotion_candidate, not here.
     """
     if channel not in ("beta", "stable"):
         raise ValueError(f"Unknown channel: {channel!r}")
@@ -154,12 +170,13 @@ def register_trained_model(model_type, source_path=None, performance=None, bump=
         "file": str(versioned_path.relative_to(API_DIR)) if versioned_path else None,
         "performance": performance or {},
         ("trained_at" if channel == "beta" else "promoted_at"): now,
-        "metadata": metadata or {},
     }
     if versioned_path:
         record["sha256"] = _sha256(versioned_path)
     if asset_records:
         record["assets"] = asset_records
+    if metadata:
+        record["metadata"] = metadata
 
     entry[channel] = record
     entry.setdefault("history", []).append({**record, "channel": channel, "recorded_at": now})

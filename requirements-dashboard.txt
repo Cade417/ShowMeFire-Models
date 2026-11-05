@@ -1,0 +1,7 @@
+# Local-only dashboard deps (dashboard/app.py). Not in requirements.txt for
+# the same reason fastapi/uvicorn were originally excluded from it (see that
+# file's header) - training itself doesn't need a web server, only the
+# optional dashboard does. Install with:
+#   pip install -r requirements.txt -r requirements-dashboard.txt
+fastapi==0.124.0
+uvicorn==0.38.0

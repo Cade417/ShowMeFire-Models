@@ -51,6 +51,53 @@ Use the current official LANDFIRE release for all three LANDFIRE layers. Do
 not rescale, classify, or colorize FBFM40. If a downloaded raster uses encoded
 units, convert it to the required units before registration.
 
+The repository includes an automated downloader. It uses the LANDFIRE Product
+Service for a clipped three-layer request and The National Map API to discover
+and mosaic the matching 3DEP DEM tiles. The LANDFIRE release is intentionally
+explicit so a later release cannot silently change an experiment. The LFPS
+service requires an identifying email address; it is used for request
+traceability and is not stored in the source manifest.
+
+From PowerShell, run:
+
+```powershell
+python static_features/download_fire_behavior_assets.py `
+  --email "analyst@example.org" `
+  --landfire-release LF2024
+```
+
+The default domain is the Missouri domain plus buffer
+(`-96.8,34.8,-88.1,41.8`). Override it with `--bbox west,south,east,north`
+when needed. Add `--force` only when intentionally replacing an existing
+source set. The command writes `dem.tif`, `fbfm40.tif`, `canopy_cover.tif`,
+and `canopy_height.tif` under `$SMF_DATA_ROOT/static/source/`, then updates
+`source_manifest.json`. Add `--output-resolution 30` or another value greater
+than 30 to request a coarser common LFPS resolution; omit it to retain the
+provider-native resolution. Network failures can be retried; partial
+downloads are retained.
+
+3DEP tiles download concurrently with six workers by default. Adjust
+`--workers` for your connection, for example `--workers 10`; use
+`--workers 1` for a serial download if the provider throttles parallel
+requests.
+
+LF2025 currently exposes the FBFM40, canopy-cover, and canopy-height layers
+only for its `SW` and `NW` update areas. For the default Missouri `SC` domain,
+use `LF2024` unless the LFPS product table confirms that a newer release covers
+the entire AOI.
+
+LFPS jobs can take more than 15 minutes for a large native-resolution AOI. The
+downloader waits up to 30 minutes by default. If the local process times out
+after LFPS later reports success, reuse the existing job (the download remains
+available for a limited time):
+
+```powershell
+python static_features/download_fire_behavior_assets.py `
+  --email "contact@showmefire.org" `
+  --landfire-release LF2024 `
+  --landfire-job-id "d42e5486-2e62-4af0-944f-fab21cbf4771"
+```
+
 Inspect every raster before continuing:
 
 ```bash
@@ -98,6 +145,19 @@ python -c "import xarray as xr, os; d=xr.open_dataset(os.environ['HRRR_REFERENCE
 ```
 
 Do not use an RTMA file as the reference grid.
+
+If no HRRR NetCDF is already available, download a small cropped reference
+file from the official HRRR archive with Herbie:
+
+```powershell
+python static_features/download_reference_hrrr.py `
+  --date 2026-08-31 `
+  --cycle 12
+```
+
+The file is written to `$SMF_DATA_ROOT/cache/hrrr/`. Use the printed path in
+the bundle command below. The date and cycle are explicit so the reference
+grid used by an experiment is reproducible.
 
 ## 4. Build and validate the immutable bundle
 

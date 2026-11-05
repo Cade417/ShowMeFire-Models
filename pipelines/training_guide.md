@@ -1,35 +1,7 @@
 # Show Me Fire Training Guide
 
-There are two additive fuel-moisture pipelines:
+This guide's content has moved to the [Model Lifecycle guide](../docs/model_lifecycle.md), which covers the same legacy-XGBoost and RTMA/spatial workflows alongside every other model family's train → publish → import → promote path in one place.
 
-1. The legacy point-based XGBoost pipeline under `pipelines/`.
-2. The RTMA/HRRR probabilistic station and spatial pipeline under `spatial/`.
-
-The spatial workflow, static terrain/land-cover/fuel inputs, release process,
-API activation, fallback, and troubleshooting are documented in the
-[Spatial Fuel-Moisture Operator Runbook](../docs/spatial_fuel_moisture_runbook.md).
-
-## Legacy XGBoost workflow
-
-The XGBoost model remains the mandatory production fallback. To rebuild it:
-
-```bash
-python pipelines/ingest_obs.py
-python pipelines/index_stations.py
-python scripts/create_snapshots.py
-python pipelines/extract_hrrr.py
-python pipelines/generate_training_set.py
-python pipelines/prepare_features.py
-python pipelines/train_model.py --channel beta
-```
-
-Review the printed chronological holdout metrics before publishing. Training
-registers beta; it does not replace stable production automatically.
-
-```bash
-python pipelines/publish_release.py --model fuel_moisture
-```
-
-Import and promotion happen separately on the API server. Do not manually edit
-feature lists, registry JSON, or model files as described by older versions of
-this document.
+- Legacy XGBoost retrain workflow (`pipelines/retrain_fuel_moisture.py`) → Model Lifecycle guide, "Archetype A".
+- RTMA/spatial pipeline, static terrain/fuel bundle → [Spatial Fuel-Moisture Operator Runbook](../docs/spatial_fuel_moisture_runbook.md) (full detail) and the Model Lifecycle guide's "Archetype B" (the publish/import/promote steps specifically).
+- Data sync (`scripts/pull_archives.sh`, `backfill_synoptic.py`, `backfill_rtma_for_hrrr.py`) → Model Lifecycle guide, §1.

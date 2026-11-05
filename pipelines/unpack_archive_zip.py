@@ -35,6 +35,18 @@ DESTINATIONS = [
     (lambda name: name.startswith("station_forecasts_") and name.endswith(".json"), paths.ARCHIVE_FORECASTS_DIR),
 ]
 
+# The server's own cache/hrrr archive stores the full-CONUS HRRR grid
+# (~488MB), never cropped - unlike this repo's fetch_hrrr(), which crops to
+# Missouri (~25MB) before ever writing to CACHE_HRRR_DIR. Both sides use the
+# same "hrrr_YYYYMMDD_12z_f04-15.nc" filename, so extracting a server zip's
+# member here would silently overwrite a correctly-cropped cache file with
+# an uncropped one carrying the wrong grid - a real incident this guard is a
+# regression test for. RTMA members are well under this too (~3.5MB), so one
+# generous threshold on the zip's own recorded size (ZIP_STORED for .nc, so
+# this is the true uncompressed size - no extraction needed to check it)
+# covers both destinations.
+MAX_CROPPED_NC_BYTES = 100 * 1024 * 1024
+
 
 def _destination_for(entry_name):
     basename = Path(entry_name).name
@@ -47,6 +59,7 @@ def _destination_for(entry_name):
 def unpack_zip(zip_path):
     print(f"Unpacking {zip_path.name}...")
     unrecognized = []
+    oversized = []
     extracted = 0
     skipped = 0
 
@@ -58,6 +71,10 @@ def unpack_zip(zip_path):
             dest_dir, basename = _destination_for(info.filename)
             if dest_dir is None:
                 unrecognized.append(info.filename)
+                continue
+
+            if basename.endswith(".nc") and info.file_size > MAX_CROPPED_NC_BYTES:
+                oversized.append((info.filename, info.file_size))
                 continue
 
             dest_dir.mkdir(parents=True, exist_ok=True)
@@ -72,12 +89,16 @@ def unpack_zip(zip_path):
             extracted += 1
 
     print(f"  extracted {extracted}, skipped {skipped} (already present)")
+    if oversized:
+        print(f"  REFUSED {len(oversized)} oversized .nc member(s) (not Missouri-cropped - see MAX_CROPPED_NC_BYTES):")
+        for name, size in oversized:
+            print(f"    - {name} ({size / 1e6:.1f} MB)")
     if unrecognized:
         print(f"  WARNING: {len(unrecognized)} unrecognized entries not extracted:")
         for name in unrecognized:
             print(f"    - {name}")
 
-    return extracted, skipped, unrecognized
+    return extracted, skipped, unrecognized, oversized
 
 
 def main():
@@ -95,16 +116,21 @@ def main():
         return
 
     total_unrecognized = []
+    total_oversized = []
     for zip_path in zip_paths:
         if not zip_path.exists():
             print(f"SKIP: {zip_path} does not exist")
             continue
         try:
-            _, _, unrecognized = unpack_zip(zip_path)
+            _, _, unrecognized, oversized = unpack_zip(zip_path)
             total_unrecognized.extend(unrecognized)
+            total_oversized.extend(oversized)
         except zipfile.BadZipFile as e:
             print(f"SKIP: {zip_path.name} is not a valid zip yet ({e}) - server may still be writing it")
 
+    if total_oversized:
+        print(f"\n{len(total_oversized)} total oversized .nc member(s) refused across all zips - "
+              f"these are the server's own uncropped archive, not this repo's Missouri-cropped cache.")
     if total_unrecognized:
         print(f"\n{len(total_unrecognized)} total unrecognized entries across all zips - review DESTINATIONS in this script.")
         sys.exit(1)

@@ -9,6 +9,7 @@ import logging
 import re
 import sys
 import time
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -124,6 +125,28 @@ def classify_failure(exc: Exception):
     return "transient"
 
 
+def _fetch_worker(hour, cache_dir):
+    """Runs in a separate process (fetch_rtma's netCDF/GRIB decode isn't
+    thread-safe, so real concurrency needs process isolation, not threads).
+    Owns its own retry loop and returns a plain, picklable outcome dict."""
+    last_exc = None
+    for attempt in range(3):
+        try:
+            output = fetch_rtma(hour, cache_dir)
+            valid, validation = validate_rtma(output)
+            if not valid:
+                raise RuntimeError(f"downloaded RTMA failed validation: {validation}")
+            return {"ok": True, "output": str(output), "sha256": sha256(output),
+                    "size": output.stat().st_size, "attempts": attempt + 1}
+        except Exception as exc:
+            last_exc = exc
+            category = classify_failure(exc)
+            if category != "transient" or attempt == 2:
+                return {"ok": False, "error": str(exc), "error_class": category, "attempts": attempt + 1}
+            time.sleep(2 ** attempt)
+    return {"ok": False, "error": str(last_exc), "error_class": classify_failure(last_exc), "attempts": 3}
+
+
 def _parse_boundary(value, end=False):
     if value is None:
         return None
@@ -177,27 +200,55 @@ def run(args, fetcher=fetch_rtma, manifest_path: Path = MANIFEST_PATH):
 
     work = missing[:args.limit] if args.limit else missing
     unresolved = []
-    for hour, target, _, reason in work:
-        key = hour.isoformat(); record = manifest["analyses"][key]
-        if args.force and target.exists():
-            target.unlink()
-        for attempt in range(3):
-            record["attempts"] = int(record.get("attempts") or 0) + 1
-            try:
-                output = fetcher(hour, paths.CACHE_RTMA_DIR)
-                valid, validation = validate_rtma(output)
-                if not valid:
-                    raise RuntimeError(f"downloaded RTMA failed validation: {validation}")
-                record.update(status="complete", error=None, error_class=None, output=str(output), sha256=sha256(output),
-                              size=output.stat().st_size, updated_at=datetime.now(timezone.utc).isoformat())
-                break
-            except Exception as exc:
-                category = classify_failure(exc)
-                record.update(status="failed", error=str(exc), error_class=category, updated_at=datetime.now(timezone.utc).isoformat())
-                if category != "transient" or attempt == 2:
-                    unresolved.append(key); logging.error("%s %s failure: %s", key, category, exc); break
-                time.sleep(2 ** attempt)
-        write_manifest(manifest, manifest_path)
+    workers = max(1, getattr(args, "workers", 1) or 1)
+
+    # Real fetches go through separate processes: fetch_rtma's netCDF/GRIB
+    # decode isn't thread-safe, so threads risk segfaults under concurrency.
+    # Test doubles run in-process (unchanged, sequential) so their side
+    # effects stay visible to the caller and don't need to be picklable.
+    if fetcher is fetch_rtma and workers > 1 and work:
+        for hour, target, _, reason in work:
+            if args.force and target.exists():
+                target.unlink()
+        with ProcessPoolExecutor(max_workers=workers) as pool:
+            futures = {pool.submit(_fetch_worker, hour, paths.CACHE_RTMA_DIR): hour for hour, _, _, _ in work}
+            for future in as_completed(futures):
+                hour = futures[future]
+                key = hour.isoformat()
+                record = manifest["analyses"][key]
+                result = future.result()
+                record["attempts"] = int(record.get("attempts") or 0) + result["attempts"]
+                if result["ok"]:
+                    record.update(status="complete", error=None, error_class=None, output=result["output"],
+                                  sha256=result["sha256"], size=result["size"], updated_at=datetime.now(timezone.utc).isoformat())
+                else:
+                    record.update(status="failed", error=result["error"], error_class=result["error_class"],
+                                  updated_at=datetime.now(timezone.utc).isoformat())
+                    unresolved.append(key)
+                    logging.error("%s %s failure: %s", key, result["error_class"], result["error"])
+                write_manifest(manifest, manifest_path)
+    else:
+        for hour, target, _, reason in work:
+            key = hour.isoformat(); record = manifest["analyses"][key]
+            if args.force and target.exists():
+                target.unlink()
+            for attempt in range(3):
+                record["attempts"] = int(record.get("attempts") or 0) + 1
+                try:
+                    output = fetcher(hour, paths.CACHE_RTMA_DIR)
+                    valid, validation = validate_rtma(output)
+                    if not valid:
+                        raise RuntimeError(f"downloaded RTMA failed validation: {validation}")
+                    record.update(status="complete", error=None, error_class=None, output=str(output), sha256=sha256(output),
+                                  size=output.stat().st_size, updated_at=datetime.now(timezone.utc).isoformat())
+                    break
+                except Exception as exc:
+                    category = classify_failure(exc)
+                    record.update(status="failed", error=str(exc), error_class=category, updated_at=datetime.now(timezone.utc).isoformat())
+                    if category != "transient" or attempt == 2:
+                        unresolved.append(key); logging.error("%s %s failure: %s", key, category, exc); break
+                    time.sleep(2 ** attempt)
+            write_manifest(manifest, manifest_path)
     print(f"processed={len(work)} complete={len(work)-len(unresolved)} unresolved={len(unresolved)} manifest={manifest_path}")
     return 1 if unresolved else 0
 
@@ -209,6 +260,7 @@ def main():
     parser.add_argument("--limit", type=int, help="Process at most N missing/forced analyses")
     parser.add_argument("--hrrr-dir", help="Override HRRR discovery directory")
     parser.add_argument("--window", choices=("anchor", "teacher"), default="teacher")
+    parser.add_argument("--workers", type=int, default=6, help="Concurrent RTMA fetches (default: 6)")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--force", action="store_true")
     raise SystemExit(run(parser.parse_args()))

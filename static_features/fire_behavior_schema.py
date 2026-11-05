@@ -96,6 +96,12 @@ def validate_bundle(bundle_path: Path, manifest_path: Path | None = None):
         valid = np.asarray(ds["static_valid_mask"].values) > 0.5
         if not valid.any():
             raise ValueError("fire behavior static bundle has no valid cells")
+        valid_fraction = float(valid.mean())
+        if valid_fraction < 0.40:
+            raise ValueError(
+                f"fire behavior static bundle covers only {valid_fraction:.1%} "
+                "of the reference grid; expected at least 40%"
+            )
         for name in CONTINUOUS_CHANNELS:
             if name == "static_valid_mask":
                 continue
@@ -130,7 +136,7 @@ def validate_bundle(bundle_path: Path, manifest_path: Path | None = None):
             raise ValueError("fire behavior static bundle contains no burnable cells")
 
     manifest["validation"] = {
-        "valid_cell_fraction": float(valid.mean()),
+        "valid_cell_fraction": valid_fraction,
         "burnable_cell_fraction": burnable_fraction,
         "fuel_model_codes": sorted(present_codes),
         "crs_validated": True,

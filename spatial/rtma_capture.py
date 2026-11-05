@@ -9,8 +9,8 @@ import xarray as xr
 from herbie import Herbie
 
 import paths
+from spatial.domain import MO_BUFFERED_BBOX, crop
 
-MO_BUFFERED_BBOX = (-96.8, -88.1, 34.8, 41.8)
 REQUIRED_VARIABLES = {"t2m", "r2", "u10", "v10"}
 
 
@@ -33,17 +33,6 @@ def as_dataset(value):
             raise RuntimeError("Herbie returned no RTMA datasets")
         value = xr.merge([sanitize_dataset(item) for item in value], compat="override")
     return sanitize_dataset(value)
-
-
-def crop(ds: xr.Dataset) -> xr.Dataset:
-    lon = xr.where(ds.longitude > 180, ds.longitude - 360, ds.longitude)
-    west, east, south, north = MO_BUFFERED_BBOX
-    mask = (lon >= west) & (lon <= east) & (ds.latitude >= south) & (ds.latitude <= north)
-    rows, cols = np.where(mask.values)
-    if not len(rows):
-        raise ValueError("RTMA grid does not intersect the configured domain")
-    ydim, xdim = mask.dims
-    return ds.isel({ydim: slice(rows.min(), rows.max() + 1), xdim: slice(cols.min(), cols.max() + 1)})
 
 
 def relative_humidity(temp_k, dewpoint_k):

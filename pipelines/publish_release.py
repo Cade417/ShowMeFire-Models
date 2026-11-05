@@ -19,6 +19,7 @@ from pathlib import Path
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from models.versioning import get_model_entry, load_active_model_path
+from models.model_types import KNOWN_MODEL_TYPES
 import paths
 
 
@@ -53,25 +54,42 @@ def publish(model_type, version=None, repo=None):
                 asset_paths.append(str(path))
                 published_assets[role] = {**asset, "filename": path.name}
         else:
-            model_path = load_active_model_path(model_type, channel="beta")
-            asset_paths.append(str(model_path))
+            # Only single-file candidates (no `assets` dict) rely on beta["file"]
+            # via load_active_model_path - multi-asset bundles that lack a
+            # model/checkpoint/static_bundle role leave beta["file"] as None,
+            # so calling this unconditionally would crash before ever reaching
+            # the assets branch above.
+            asset_paths.append(str(load_active_model_path(model_type, channel="beta")))
         meta_path.write_text(json.dumps({
             "model_type": model_type,
             "version": beta["version"],
             "performance": beta.get("performance", {}),
             "trained_at": beta.get("trained_at"),
-            "assets": published_assets,
+            # Preserve the complete training contract for the API-side
+            # promotion gates. Without this, imported candidates appear to
+            # have good scores but are missing all required metadata.
             "model_metadata": beta.get("metadata", {}),
+            "assets": published_assets,
         }, indent=2))
 
-        cmd = [
-            "gh", "release", "create", tag,
-            *asset_paths, str(meta_path),
-            "--repo", repo,
-            "--prerelease",
-            "--title", f"{model_type} {beta['version']}",
-            "--notes", f"Beta candidate for {model_type}. Performance: {json.dumps(beta.get('performance', {}))}",
-        ]
+        exists = subprocess.run(
+            ["gh", "release", "view", tag, "--repo", repo],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        ).returncode == 0
+        if exists:
+            # The artifact/version is unchanged; refresh the existing release
+            # so its metadata.json gains the repaired promotion contract.
+            cmd = ["gh", "release", "upload", tag, *asset_paths, str(meta_path),
+                   "--repo", repo, "--clobber"]
+        else:
+            cmd = [
+                "gh", "release", "create", tag,
+                *asset_paths, str(meta_path),
+                "--repo", repo,
+                "--prerelease",
+                "--title", f"{model_type} {beta['version']}",
+                "--notes", f"Beta candidate for {model_type}. Performance: {json.dumps(beta.get('performance', {}))}",
+            ]
         print(f"Running: {' '.join(cmd)}")
         subprocess.run(cmd, check=True)
 
@@ -81,7 +99,7 @@ def publish(model_type, version=None, repo=None):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Publish a beta model candidate as a GitHub pre-release")
-    parser.add_argument("--model", required=True, choices=["fuel_moisture", "fire_danger", "fuel_moisture_spatial", "fire_behavior_static"])
+    parser.add_argument("--model", required=True, choices=sorted(KNOWN_MODEL_TYPES))
     parser.add_argument("--version", default=None, help="Beta version to publish (defaults to the current beta)")
     parser.add_argument("--repo", default=None, help="owner/repo (defaults to SMF_GITHUB_REPO env var)")
     args = parser.parse_args()

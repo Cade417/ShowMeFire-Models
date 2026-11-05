@@ -25,7 +25,9 @@ def generate_training_set():
         wf.temp_c,
         wf.rel_humidity,
         wf.wind_speed_ms,
-        wf.precip_mm,
+        COALESCE(wf.precip_interval_mm, wf.precip_mm) AS precip_mm,
+        wf.precip_mm AS precip_accum_mm,
+        wf.precip_interval_hours,
         s.lat,
         s.lon
     FROM observations o

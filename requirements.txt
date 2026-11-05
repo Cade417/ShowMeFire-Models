@@ -8,7 +8,9 @@ xarray==2025.6.1
 netCDF4==1.7.3
 cfgrib==0.9.15.1
 eccodes==2.44.0
-eccodeslib==2.44.1.8
+# The Windows eccodes wheel bundles the native library; eccodeslib publishes
+# no Windows distribution.
+eccodeslib==2.44.1.8; platform_system != "Windows"
 herbie-data==2025.12.0
 python-dotenv==1.2.1
 
@@ -25,3 +27,7 @@ cairocffi==1.7.1
 rasterio==1.4.4
 pyproj==3.7.1
 requests==2.32.5
+
+# fire_risk_fusion: Poisson/binomial GLM fitting for the county-day count
+# model and its poisson_binary_consistency diagnostic.
+statsmodels==0.14.6

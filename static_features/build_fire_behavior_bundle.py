@@ -60,14 +60,25 @@ def reference_grid(hrrr_path: Path):
         if not len(rows):
             raise ValueError("HRRR file does not intersect static domain")
         ydim, xdim = mask.dims
-        x_values, y_values = np.asarray(ds[xdim].values), np.asarray(ds[ydim].values)
+        crs = _hrrr_crs(ds)
+        if xdim in ds.coords and ydim in ds.coords:
+            x_values, y_values = np.asarray(ds[xdim].values), np.asarray(ds[ydim].values)
+        else:
+            # Herbie/cfgrib can serialize y/x as dimensions without
+            # projected coordinate variables. Derive them from the
+            # two-dimensional geographic coordinates instead of treating
+            # dimension indices as metre coordinates.
+            projected_x, projected_y = pyproj.Transformer.from_crs(
+                "EPSG:4326", crs, always_xy=True
+            ).transform(lon.values, ds.latitude.values)
+            x_values = np.asarray(projected_x)[rows.min(), :]
+            y_values = np.asarray(projected_y)[:, cols.min()]
         xmin, xmax = float(x_values[cols.min()]), float(x_values[cols.max()])
         ymin, ymax = float(y_values[rows.min()]), float(y_values[rows.max()])
         if xmax < xmin:
             xmin, xmax = xmax, xmin
         if ymax < ymin:
             ymin, ymax = ymax, ymin
-        crs = _hrrr_crs(ds)
     transform = from_bounds(xmin, ymin, xmax, ymax, GRID_SIZE, GRID_SIZE)
     x = transform.c + (np.arange(GRID_SIZE) + 0.5) * transform.a
     y = transform.f + (np.arange(GRID_SIZE) + 0.5) * transform.e

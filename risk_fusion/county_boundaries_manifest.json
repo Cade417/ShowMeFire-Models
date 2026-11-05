@@ -1,0 +1,8 @@
+{
+  "schema": "county-boundaries-v1",
+  "crs": "EPSG:4326",
+  "source": "M:\\_Development\\ShowMeFire\\api\\maps\\shapefiles\\MO_County_Boundaries\\MO_County_Boundaries.shp",
+  "source_crs": "EPSG:3857",
+  "county_count": 115,
+  "sha256": "3ccd5014728a528168080a028947956c7aeac1db750aa1b654e87471749f981c"
+}

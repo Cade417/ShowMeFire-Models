@@ -133,6 +133,8 @@ def init_database():
             rel_humidity REAL,
             wind_speed_ms REAL,
             precip_mm REAL,
+            precip_interval_mm REAL,
+            precip_interval_hours REAL,
             extraction_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (snapshot_id) REFERENCES snapshots (id)
         )
@@ -161,6 +163,8 @@ def init_database():
             rel_humidity REAL,
             wind_speed_ms REAL,
             precip_mm REAL,
+            precip_interval_mm REAL,
+            precip_interval_hours REAL,
             fuel_moisture REAL,
             UNIQUE(station_id, valid_time, forecast_run_time)
         )
@@ -191,6 +195,14 @@ def init_database():
     try: cursor.execute('ALTER TABLE observations ADD COLUMN wind_speed_ms REAL')
     except: pass
     try: cursor.execute('ALTER TABLE observations ADD COLUMN precip_accum_1h_mm REAL')
+    except: pass
+    try: cursor.execute('ALTER TABLE station_forecasts ADD COLUMN precip_interval_mm REAL')
+    except: pass
+    try: cursor.execute('ALTER TABLE station_forecasts ADD COLUMN precip_interval_hours REAL')
+    except: pass
+    try: cursor.execute('ALTER TABLE weather_features ADD COLUMN precip_interval_mm REAL')
+    except: pass
+    try: cursor.execute('ALTER TABLE weather_features ADD COLUMN precip_interval_hours REAL')
     except: pass
 
     # 7. Banner Configuration (Operational settings)
@@ -566,18 +578,34 @@ def get_all_stations():
     conn.close()
     return rows
 
-def get_unprocessed_snapshots():
-    """Returns all snapshots that haven't been mined yet."""
+def get_unprocessed_snapshots(since_date: Optional[str] = None):
+    """Returns snapshots that haven't been mined yet.
+
+    since_date (optional, 'YYYY-MM-DD'): only snapshots on/after this date.
+    Without it, this returns EVERY unprocessed snapshot regardless of age -
+    fine for a genuine one-time historical backfill, but a snapshots table
+    can accumulate years of never-mined rows (e.g. from building the
+    risk_fusion historical panel) that a routine retrain has no reason to
+    keep re-scanning. Default is unchanged (None = no filter) so existing
+    callers keep their current behavior.
+    """
     db_path = get_db_path()
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
-    
-    cursor.execute('''
-        SELECT id, hrrr_filename, snapshot_date 
-        FROM snapshots 
-        WHERE is_processed = 0
-    ''')
+
+    if since_date:
+        cursor.execute('''
+            SELECT id, hrrr_filename, snapshot_date
+            FROM snapshots
+            WHERE is_processed = 0 AND snapshot_date >= ?
+        ''', (since_date,))
+    else:
+        cursor.execute('''
+            SELECT id, hrrr_filename, snapshot_date
+            FROM snapshots
+            WHERE is_processed = 0
+        ''')
     rows = cursor.fetchall()
     conn.close()
     return rows
@@ -589,15 +617,18 @@ def save_hrrr_features(snapshot_id, features, station_id):
             cursor = conn.cursor()
             cursor.execute('''
                 INSERT INTO weather_features 
-                (snapshot_id, station_id, temp_c, rel_humidity, wind_speed_ms, precip_mm)
-                VALUES (?, ?, ?, ?, ?, ?)
+                (snapshot_id, station_id, temp_c, rel_humidity, wind_speed_ms, precip_mm,
+                 precip_interval_mm, precip_interval_hours)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 snapshot_id, 
                 station_id,
                 features['temp_c'], 
                 features['rel_humidity'], 
                 features['wind_speed_ms'], 
-                features['precip_mm']
+                features['precip_mm'],
+                features.get('precip_interval_mm'),
+                features.get('precip_interval_hours')
             ))
             conn.commit()
     except Exception as e:
@@ -892,6 +923,20 @@ def get_active_briefings() -> List[Dict]:
     rows = cursor.fetchall()
     conn.close()
     return [dict(row) for row in rows]
+
+
+# --- Ignored stations helpers ---
+
+def get_ignored_stations() -> set:
+    """Return the set of station IDs to exclude from processing."""
+    db_path = get_db_path()
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT stid FROM ignored_stations")
+        return {row[0] for row in cursor.fetchall()}
+    finally:
+        conn.close()
 
 
 # --- AFD helpers ---

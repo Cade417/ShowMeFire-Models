@@ -2,6 +2,12 @@
 
 # Show Me Fire - Automated ML Model Training Pipeline
 # This script automates the complete process of training a new fuel moisture prediction model
+#
+# NOTE: pipelines/retrain_fuel_moisture.py now covers the same 8 phases in a
+# single Python process (clearer error reporting, plus hyperparameter search
+# and a beta-vs-stable comparison after training). This script is kept
+# working for anyone with existing muscle memory, but prefer the Python
+# orchestrator for new/scheduled runs.
 
 set -e  # Exit on any error
 
@@ -132,17 +138,15 @@ check_python_packages() {
     fi
 }
 
-# Check if required directories exist
+# Every path used by the phases below is actually resolved through paths.py
+# (anchored at $SMF_DATA_ROOT, not this repo checkout), which already
+# creates every directory it defines on import. This is just a sanity check,
+# not the thing that makes those directories exist.
 check_directories() {
-    local dirs=("data" "models" "plots" "cache/hrrr")
-    for dir in "${dirs[@]}"; do
-        if [[ ! -d "$dir" ]]; then
-            warning "Directory '$dir' does not exist. Creating..."
-            if [[ "$DRY_RUN" != "true" ]]; then
-                mkdir -p "$dir"
-            fi
-        fi
-    done
+    if [[ "$DRY_RUN" == "true" ]]; then
+        return 0
+    fi
+    python3 -c "import paths" 2>/dev/null || warning "Could not import paths.py to verify data directories"
 }
 
 # Run a Python script with error handling
@@ -245,8 +249,9 @@ main() {
         echo "📊 Training Data Summary:"
         python3 -c "
 import pandas as pd
+import paths
 try:
-    df = pd.read_csv('data/final_training_data.csv')
+    df = pd.read_csv(paths.TRAINING_DATA_DIR / 'final_training_data.csv')
     print(f'   Total training samples: {len(df):,}')
     print(f'   Date range: {df[\"obs_time\"].min()} to {df[\"obs_time\"].max()}')
     print(f'   Stations: {df[\"station_id\"].nunique()}')

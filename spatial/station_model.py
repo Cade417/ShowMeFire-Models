@@ -9,9 +9,13 @@ QUANTILES = (0.1, 0.5, 0.9)
 
 class StationSequenceModel(nn.Module):
     """GRU that predicts quantile corrections to the physics trajectory."""
-    def __init__(self, input_size, hidden_size=64):
+    def __init__(self, input_size, hidden_size=16, num_layers=1, dropout=0.0):
         super().__init__()
-        self.gru = nn.GRU(input_size, hidden_size, batch_first=True)
+        if num_layers < 1:
+            raise ValueError("num_layers must be at least 1")
+        if num_layers == 1 and dropout:
+            raise ValueError("dropout is only supported for multilayer GRUs")
+        self.gru = nn.GRU(input_size, hidden_size, num_layers=num_layers, dropout=dropout, batch_first=True)
         self.head = nn.Sequential(nn.Linear(hidden_size, hidden_size), nn.SiLU(), nn.Linear(hidden_size, 3))
 
     def forward(self, features, physics_fm):
