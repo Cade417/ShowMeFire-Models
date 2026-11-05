@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ShowMeFire model-training dashboard</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <h1>ShowMeFire model-training</h1>
+  <p class="subtitle">Local pipeline + model status - nothing here leaves this machine.</p>
+</header>
+
+<main>
+  <section id="sources-section">
+    <h2>Data sources</h2>
+    <table id="sources-table">
+      <thead><tr><th>Source</th><th>Status</th><th>Complete</th><th>Pending</th><th>Failed</th><th>Latest</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <section id="models-section">
+    <h2>Models</h2>
+    <table id="models-table">
+      <thead><tr><th>Model</th><th>Stable</th><th>Beta</th><th>History</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <section id="jobs-section">
+    <h2>Job log</h2>
+    <select id="job-select"></select>
+    <pre id="job-log">Select a job to view its output.</pre>
+  </section>
+</main>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

@@ -23,6 +23,7 @@ KNOWN_MODEL_TYPES = [
     "fire_risk_fusion",
     "fire_weather_ml",
     "fire_weather_index",
+    "ensemble_fire_danger",
     "fuel_moisture_station_guarded",         # server-side "v4"
     "fuel_moisture_station_summer_guarded",  # server-side "v5"
     "fuel_moisture_station_hybrid",

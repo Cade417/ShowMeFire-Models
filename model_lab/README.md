@@ -7,7 +7,7 @@ Local Streamlit toolkit to **train, test, rank, compare, and preview beta foreca
 ```powershell
 cd M:\_Development\ShowMeFire\model-training
 .venv\Scripts\Activate.ps1
-$env:SMF_DATA_ROOT = "M:\_Development\ShowMeFire\training-data"
+$env:SMF_DATA_ROOT = "D:\_Development\ShowMeFire\training-data"
 # Beta graphics use the deployed RAWS API by default:
 # $env:SMF_API_BASE_URL = "http://localhost:8000"  # optional local override
 python -m pip install -r requirements-lab.txt

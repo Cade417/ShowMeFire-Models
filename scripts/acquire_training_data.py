@@ -1,49 +1,32 @@
-"""
-Unified data-acquisition orchestrator. Does not reimplement any backfill
-logic - scripts/backfill_synoptic.py, backfill_hrrr.py, and
-backfill_rtma_for_hrrr.py already have their own resumable manifests and
-real content validation (see docs/spatial_fuel_moisture_runbook.md). This
-script's job is sequencing (the runbook's own order: Synoptic obs -> HRRR
--> RTMA-for-HRRR, since RTMA backfill discovers its analysis window from
-local HRRR valid times), an environment preflight, and a final aggregate
-report - nothing here should duplicate a sub-script's own logic.
+"""Unified data-acquisition orchestrator (Synoptic -> HRRR -> RTMA, plus the
+optional static-raster step and a final coverage report).
 
-Each step runs as a real subprocess invocation of that script's own CLI,
-so every step remains exactly as independently runnable and resumable as
-before this orchestrator existed. A failed step does not abort the
-sequence - each step is already designed to tolerate partial failure and
-resume - but its exit code is recorded and surfaced in the final summary.
+Thin wrapper around pipeline/run.py for the sequencing/preflight/freshness
+logic this script and scripts/sync_training_data.py used to each duplicate a
+copy of - see pipeline/run.py's module docstring. The static-raster step and
+raw-archive coverage report stay here since they're unique to this script.
 
-Static raster acquisition (static_features/download_sources.py) is
-skipped by default: it needs real user-supplied source file/URL
-selections this orchestrator cannot invent (see docs/
-spatial_fuel_moisture_runbook.md section 6). --include-static-rasters
-exists for when those selections are ready; until then this prints a
-clear "skipped: not yet configured" line rather than silently omitting it.
+Static raster acquisition (static_features/download_sources.py) is skipped
+by default: it needs real user-supplied source file/URL selections this
+orchestrator cannot invent (see docs/spatial_fuel_moisture_runbook.md
+section 6). --include-static-rasters exists for when those selections are
+ready; until then this prints a clear "skipped: not yet configured" line
+rather than silently omitting it.
 """
 from __future__ import annotations
 
 import argparse
-import subprocess
 import sys
 from pathlib import Path
 from typing import List, NamedTuple, Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import paths
+from pipeline.run import run_sync
 from scripts import check_environment
 from scripts import raw_archive_coverage_report
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
-STEP_ORDER = ("synoptic", "hrrr", "rtma")
-STEP_SCRIPTS = {
-    "synoptic": SCRIPTS_DIR / "backfill_synoptic.py",
-    "hrrr": SCRIPTS_DIR / "backfill_hrrr.py",
-    "rtma": SCRIPTS_DIR / "backfill_rtma_for_hrrr.py",
-}
-# backfill_rtma_for_hrrr.py has no --days-back (its window is derived from
-# local HRRR valid times, not a standalone lookback) - never pass it one.
-STEPS_SUPPORTING_DAYS_BACK = {"synoptic", "hrrr"}
+STEP_ORDER = ("r2_restore", "synoptic", "hrrr", "rtma")
 
 
 class StepResult(NamedTuple):
@@ -51,33 +34,6 @@ class StepResult(NamedTuple):
     skipped: bool
     exit_code: Optional[int]
     reason: Optional[str]
-
-
-def _build_step_args(step: str, args: argparse.Namespace) -> List[str]:
-    step_args = []
-    if args.start:
-        step_args += ["--start", args.start]
-    if args.end:
-        step_args += ["--end", args.end]
-    if args.days_back is not None and step in STEPS_SUPPORTING_DAYS_BACK:
-        step_args += ["--days-back", str(args.days_back)]
-    if args.workers is not None:
-        step_args += ["--workers", str(args.workers)]
-    if args.limit is not None:
-        step_args += ["--limit", str(args.limit)]
-    if args.dry_run:
-        step_args.append("--dry-run")
-    if args.force:
-        step_args.append("--force")
-    return step_args
-
-
-def run_step(step: str, args: argparse.Namespace) -> StepResult:
-    script = STEP_SCRIPTS[step]
-    command = [sys.executable, str(script)] + _build_step_args(step, args)
-    print(f"\n=== {step}: {' '.join(command)} ===")
-    completed = subprocess.run(command)
-    return StepResult(step=step, skipped=False, exit_code=completed.returncode, reason=None)
 
 
 def run_static_rasters(args: argparse.Namespace) -> StepResult:
@@ -107,7 +63,9 @@ def run_acquisition(args: argparse.Namespace) -> List[StepResult]:
         if step in args.skip:
             results.append(StepResult(step=step, skipped=True, exit_code=None, reason="excluded via --skip"))
             continue
-        results.append(run_step(step, args))
+        code = run_sync([step], dry_run=args.dry_run, start=args.start, end=args.end, days_back=args.days_back,
+                         limit=args.limit, workers=args.workers, force=args.force, skip_doctor=True)
+        results.append(StepResult(step=step, skipped=False, exit_code=code, reason=None))
     results.append(run_static_rasters(args))
 
     print("\n=== raw archive coverage report ===")

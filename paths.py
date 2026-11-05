@@ -81,7 +81,34 @@ FIRE_WEATHER_INDEX_PANEL = FIRE_WEATHER_INDEX_DIR / "county_days.csv"
 FIRE_WEATHER_INDEX_SPLIT_MANIFEST = REPORTS_DIR / "fire_weather_index_split_manifest.json"
 FIRE_WEATHER_INDEX_CANDIDATE_DIR = MODELS_DIR / "fire_weather_index_shadow_candidate"
 
+# ensemble_fire_danger (Day-1 ensemble fire danger probabilities/categorical,
+# HREF-style members + REFS/HREF ensprod) - calibration-only model family,
+# see ensemble_fire_danger/__init__.py and docs/ensemble_fire_danger.md.
+CACHE_ENSEMBLE_DIR = CACHE_DIR / "ensemble"
+ENSEMBLE_FD_DIR = DATA_ROOT / "ensemble_fire_danger"
+ENSEMBLE_FD_DAYS_DIR = ENSEMBLE_FD_DIR / "days"  # one .npz per captured forecast day (panel inputs)
+ENSEMBLE_FD_PANEL = ENSEMBLE_FD_DIR / "panel.parquet"
+ENSEMBLE_FD_SPLIT_MANIFEST = REPORTS_DIR / "ensemble_fire_danger_split_manifest.json"
+ENSEMBLE_FD_REPORT = REPORTS_DIR / "ensemble_fire_danger_offline_evaluation.json"
+ENSEMBLE_FD_CANDIDATE_DIR = MODELS_DIR / "ensemble_fire_danger_candidate"
+
+# detection_dataset (detection-confidence training dataset: SMF detections +
+# feedback + NERIS outdoor fires, plus ML-derived columns). Inputs arrive via
+# the API's export_detection_training_data.py into FIRE_LABELS_DIR.
+DETECTION_DATASET_DIR = DATA_ROOT / "detection_dataset"
+NERIS_DIR = REPO_ROOT / "NERIS_Data"
+DETECTION_DATASET_CANDIDATE_DIR = MODELS_DIR / "detection_dataset_candidate"
+DETECTION_CONFIDENCE_V2_DIR = DETECTION_DATASET_DIR / "confidence_v2"  # vegetation-fire confidence candidate: reports, bundles, run files
+# fire_outlook (seven-day outlook verification/calibration, see fire_outlook/__init__.py)
+FIRE_OUTLOOK_DIR = DATA_ROOT / "fire_outlook"
+FIRE_OUTLOOK_RECORDS_DIR = FIRE_OUTLOOK_DIR / "verification"  # parquet/csv verification records exported by the fire-outlook worker
+FIRE_OUTLOOK_SPLIT_MANIFEST = REPORTS_DIR / "fire_outlook_split_manifest.json"
+FIRE_OUTLOOK_REPORT = REPORTS_DIR / "fire_outlook_offline_evaluation.json"
+FIRE_OUTLOOK_CANDIDATE_DIR = MODELS_DIR / "fire_outlook_candidate"
+
 for _d in (CACHE_HRRR_DIR, CACHE_RTMA_DIR, CACHE_RRFS_DIR, CACHE_FV3HIRES_DIR, ARCHIVE_RAW_DATA_DIR, ARCHIVE_FORECASTS_DIR, ARCHIVE_ZIPS_DIR,
            TRAINING_DATA_DIR, SNAPSHOTS_DIR, MODELS_DIR, PLOTS_DIR, ALIGNED_DIR, REPORTS_DIR, EXPERIMENTS_DIR,
-           STATIC_SOURCE_DIR, STATIC_BUNDLE_DIR, FIRE_LABELS_DIR, RISK_FUSION_DIR, FIRE_WEATHER_ML_DIR, FIRE_WEATHER_INDEX_DIR):
+           STATIC_SOURCE_DIR, STATIC_BUNDLE_DIR, FIRE_LABELS_DIR, RISK_FUSION_DIR, FIRE_WEATHER_ML_DIR, FIRE_WEATHER_INDEX_DIR,
+           CACHE_ENSEMBLE_DIR, ENSEMBLE_FD_DIR, ENSEMBLE_FD_DAYS_DIR, DETECTION_DATASET_DIR,
+           FIRE_OUTLOOK_DIR, FIRE_OUTLOOK_RECORDS_DIR):
     _d.mkdir(parents=True, exist_ok=True)

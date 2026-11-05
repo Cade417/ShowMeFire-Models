@@ -18,7 +18,7 @@ Streamlit lab for scoring production vs beta forecast archives against observati
 ```powershell
 cd M:\_Development\ShowMeFire\model-training
 .venv\Scripts\Activate.ps1
-$env:SMF_DATA_ROOT = "M:\_Development\ShowMeFire\training-data"
+$env:SMF_DATA_ROOT = "D:\_Development\ShowMeFire\training-data"
 python -m pip install -r requirements-lab.txt
 streamlit run model_lab/app.py
 ```

@@ -27,6 +27,18 @@ from risk_fusion.county_geometry import load_counties
 
 OUTPUT_PATH = REPO_ROOT / "risk_fusion" / "county_cells.json"
 
+# api/forecast/DailyForecast.py crops HRRR in TWO steps before handing
+# hourly grids to its shadow hooks: first core.domain.crop()'s buffered
+# MO_BUFFERED_BBOX (what the plain "hrrr" source below reproduces, (273,
+# 267)), then this second, tighter box (DailyForecast.py's own
+# `mo_bounds`, ~line 1572) right before building the per-hour grids the
+# hooks actually receive, (196, 205). A county_cells.json meant to index
+# THOSE grids (api/core/risk_fusion_reference/county_cells.json) must be
+# built against this narrower crop, not the buffered one - see
+# api/core/risk_fusion_county_reference.py's docstring. Keep this in sync
+# with DailyForecast.py's mo_bounds if that ever changes.
+API_MO_BOUNDS = {"lat": (35.8, 40.8), "lon": (-95.8, -89.1)}
+
 # fire_weather_index blends HRRR (backbone) with RRFS/FV3-HIRES, each on its
 # own grid/projection/resolution - each needs its own cell->county index,
 # built the same way as HRRR's but pointed at that source's own cache dir.
@@ -37,6 +49,13 @@ SOURCE_CONFIG = {
              "output": REPO_ROOT / "fire_weather_index" / "county_cells_rrfs.json"},
     "fv3hires": {"cache_dir": paths.CACHE_FV3HIRES_DIR, "glob": "fv3hires_*.nc",
                  "output": REPO_ROOT / "fire_weather_index" / "county_cells_fv3hires.json"},
+    # Same HRRR cache as "hrrr", but additionally cropped to
+    # API_MO_BOUNDS - use this to regenerate
+    # api/core/risk_fusion_reference/county_cells.json (copy the output
+    # over by hand, same as the plain "hrrr" output always has been).
+    "hrrr_api": {"cache_dir": paths.CACHE_HRRR_DIR, "glob": "hrrr_*.nc",
+                 "output": REPO_ROOT / "risk_fusion" / "county_cells_api.json",
+                 "api_crop": True},
 }
 
 
@@ -53,7 +72,30 @@ def _find_sample(explicit: Path | None, source: str = "hrrr") -> Path:
     return candidates[0]
 
 
-def build(sample: Path) -> dict:
+def _crop_to_api_bounds(lat, lon):
+    """
+    Verbatim port of DailyForecast.py's second mo_bounds crop (the mask +
+    bounding-box-of-mask logic around its own `mo_bounds` variable) - see
+    API_MO_BOUNDS above for why this exists as a second step.
+    """
+    import numpy as np
+
+    lat_mask = (lat >= API_MO_BOUNDS["lat"][0]) & (lat <= API_MO_BOUNDS["lat"][1])
+    lon_mask = (lon >= API_MO_BOUNDS["lon"][0]) & (lon <= API_MO_BOUNDS["lon"][1])
+    combined_mask = lat_mask & lon_mask
+
+    rows_with_data = np.any(combined_mask, axis=1)
+    cols_with_data = np.any(combined_mask, axis=0)
+    row_indices = np.where(rows_with_data)[0]
+    col_indices = np.where(cols_with_data)[0]
+    if not len(row_indices) or not len(col_indices):
+        raise SystemExit("API_MO_BOUNDS crop does not intersect the sampled HRRR grid")
+    row_min, row_max = row_indices[0], row_indices[-1] + 1
+    col_min, col_max = col_indices[0], col_indices[-1] + 1
+    return lat[row_min:row_max, col_min:col_max], lon[row_min:row_max, col_min:col_max]
+
+
+def build(sample: Path, api_crop: bool = False) -> dict:
     import numpy as np
     import xarray as xr
     from shapely.geometry import Point
@@ -62,10 +104,13 @@ def build(sample: Path) -> dict:
     with xr.open_dataset(sample, decode_cf=False) as ds:
         lat = np.asarray(ds["latitude"].values)
         lon = np.asarray(ds["longitude"].values)
-        grid_shape = list(lat.shape)
 
     if lon.max() > 180:
         lon = np.where(lon > 180, lon - 360, lon)
+
+    if api_crop:
+        lat, lon = _crop_to_api_bounds(lat, lon)
+    grid_shape = list(lat.shape)
 
     counties = load_counties()
     prepared = [(prep(c["geometry_wgs84"]), c["geometry_wgs84"].bounds, c["fips"]) for c in counties]
@@ -87,7 +132,7 @@ def build(sample: Path) -> dict:
     return {
         "schema": "county-cells-v1",
         "grid_shape": grid_shape,
-        "source_file": sample.name,
+        "source_file": f"{sample.name} (+ API_MO_BOUNDS crop)" if api_crop else sample.name,
         "cell_count": len(assignments),
         "counties_covered": counties_hit,
         "cell_to_fips": assignments,
@@ -106,7 +151,7 @@ def main():
     sample = _find_sample(explicit_sample, args.source)
     output_path = args.output or SOURCE_CONFIG[args.source]["output"]
     print(f"Building {args.source} county-cell index from {sample}...")
-    index = build(sample)
+    index = build(sample, api_crop=SOURCE_CONFIG[args.source].get("api_crop", False))
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(index), encoding="utf-8")

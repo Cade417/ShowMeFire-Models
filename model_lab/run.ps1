@@ -4,7 +4,7 @@ $Root = Split-Path -Parent $PSScriptRoot
 Set-Location $Root
 
 if (-not $env:SMF_DATA_ROOT) {
-    $env:SMF_DATA_ROOT = "M:\_Development\ShowMeFire\training-data"
+    $env:SMF_DATA_ROOT = "D:\_Development\ShowMeFire\training-data"
 }
 
 $VenvPython = Join-Path $Root ".venv\Scripts\python.exe"

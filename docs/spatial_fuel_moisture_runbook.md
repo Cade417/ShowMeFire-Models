@@ -684,7 +684,7 @@ only in regime/lead cells that improve development out-of-fold MAE without an
 unsafe fold RMSE or critical-fuel-moisture regression.
 
 ```powershell
-$env:SMF_DATA_ROOT='M:\_Development\ShowMeFire\training-data'
+$env:SMF_DATA_ROOT='D:\_Development\ShowMeFire\training-data'
 $env:SMF_XGB_DEVICE='cuda'
 python spatial/prepare_v5.py
 python spatial/search_v5.py

@@ -17,7 +17,7 @@ $env:PYTHONUTF8 = "1"
 $env:PYTHONIOENCODING = "utf-8"
 
 $RepoRoot = "M:\_Development\ShowMeFire\model-training"
-$LogDir = "M:\_Development\ShowMeFire\training-data\logs\score_live"
+$LogDir = "D:\_Development\ShowMeFire\training-data\logs\score_live"
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 
 $Today = Get-Date -Format "yyyy-MM-dd"
