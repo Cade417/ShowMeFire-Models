@@ -7,6 +7,10 @@ Windows CUDA setup, training gates, release/import, API activation, rollback,
 and troubleshooting—use the
 [Spatial Fuel-Moisture Operator Runbook](docs/spatial_fuel_moisture_runbook.md).
 
+For the desktop-to-production LANDFIRE/topography workflow used by the
+experimental Rothermel product, use the
+[Observed Rothermel Spread Rate Operator Runbook](docs/observed_spread_rate_runbook.md).
+
 No bulk training data is ever pushed to this repo - see `paths.py`.
 
 **For the full data → train → publish → import → promote workflow, across every model family (not just fuel_moisture), see the [Model Lifecycle guide](docs/model_lifecycle.md).** That's now the canonical reference for retraining, publishing, importing, and promoting/activating any model type. This README keeps only repo setup and data-sync instructions.

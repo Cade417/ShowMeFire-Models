@@ -154,7 +154,7 @@ def register_trained_model(model_type, source_path=None, performance=None, bump=
             shutil.copy2(source, destination)
             asset_records[role] = {"file": str(destination.relative_to(API_DIR)), "sha256": _sha256(destination),
                                    **{key: val for key, val in specification.items() if key != "path"}}
-        primary = asset_records.get("model") or asset_records.get("checkpoint")
+        primary = asset_records.get("model") or asset_records.get("checkpoint") or asset_records.get("static_bundle")
         versioned_path = API_DIR / primary["file"] if primary else None
     else:
         source_path = Path(source_path)
@@ -171,6 +171,8 @@ def register_trained_model(model_type, source_path=None, performance=None, bump=
         "performance": performance or {},
         ("trained_at" if channel == "beta" else "promoted_at"): now,
     }
+    if versioned_path:
+        record["sha256"] = _sha256(versioned_path)
     if asset_records:
         record["assets"] = asset_records
     if metadata:

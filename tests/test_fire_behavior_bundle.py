@@ -1,4 +1,5 @@
 import json
+import types
 from pathlib import Path
 from unittest.mock import patch
 
@@ -135,7 +136,9 @@ def test_asset_only_candidate_publishes_without_model_path(tmp_path):
     }
     captured = {}
 
-    def capture_release(command, check):
+    def capture_release(command, check=False, **_):
+        if command[:3] == ["gh", "release", "view"]:
+            return types.SimpleNamespace(returncode=1)  # no existing release -> create path
         assert check is True
         metadata_path = Path(next(item for item in command if Path(item).name == "metadata.json"))
         captured.update(json.loads(metadata_path.read_text()))

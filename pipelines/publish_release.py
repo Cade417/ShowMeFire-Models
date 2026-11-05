@@ -31,7 +31,12 @@ def publish(model_type, version=None, repo=None):
     entry = get_model_entry(model_type)
     beta = entry.get("beta")
     if not beta:
-        raise SystemExit(f"No beta candidate registered for {model_type!r} - train one first (pipelines/train_model.py)")
+        hint = (
+            "run pipelines/register_fire_behavior_static.py first"
+            if model_type == "fire_behavior_static"
+            else "train one first"
+        )
+        raise SystemExit(f"No beta candidate registered for {model_type!r} - {hint}")
     if version and beta["version"] != version:
         raise SystemExit(f"Requested version {version!r} does not match current beta {beta['version']!r}")
 
@@ -44,6 +49,8 @@ def publish(model_type, version=None, repo=None):
         if beta.get("assets"):
             for role, asset in beta["assets"].items():
                 path = paths.DATA_ROOT / asset["file"]
+                if not path.is_file():
+                    raise SystemExit(f"Registered release asset is missing: {role} -> {path}")
                 asset_paths.append(str(path))
                 published_assets[role] = {**asset, "filename": path.name}
         else:
